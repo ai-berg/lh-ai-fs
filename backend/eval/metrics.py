@@ -7,13 +7,21 @@ pipeline flags that matches neither a planted flaw nor a negative is routed to a
 findings as errors would punish a better pipeline, counting them as hits would
 inflate precision.
 
-The grounding-consistency check re-applies the pipeline's own `_is_grounded` to
+The grounding-consistency check re-applies the pipeline's own `is_grounded` to
 every cited quote. NOTE: this is NOT an independent hallucination oracle — it's
 the same check the pipeline's grounding gate runs, so on the shipped report it is
 ~0 by construction. It is a regression guard (catches a quote that slipped the
 gate) and the basis for the --live pre/post-gate ablation, not a measure of the
 raw model's faithfulness. A true independent check would need a different
 mechanism (entailment/NLI), named as future work in services/grounding.py.
+
+Attribution: the reused grounding primitive (`is_grounded`) carries over the
+literal-source-citation discipline from prior production experience on a
+legal-domain LLM/RAG assistant. The *eval methodology* here — blind-frozen gold
+set, labeled negatives, pending-adjudication, Wilson CIs, the gate ablation —
+comes from grounded-generation research (FActScore, SAFE, RAGAS, the Stanford
+RegLab legal-hallucination audits), not from that prior system, which had no
+output-quality eval of this kind.
 """
 
 import math

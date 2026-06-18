@@ -33,6 +33,16 @@ runs before the verdict rather than rationalizing it after.
 
 ## The eval, and why it's built to report bad news
 
+A note on where this came from: the *grounding primitive* the eval reuses to
+detect ungrounded quotes is the same literal-source-citation check carried over
+from prior production experience on a legal-domain LLM/RAG assistant. The *eval
+methodology* itself — blind-frozen gold set, labeled negatives, the
+pending-adjudication bucket, Wilson CIs, the pre/post-gate ablation — is from
+grounded-generation research (FActScore, SAFE, RAGAS, the Stanford RegLab legal-
+hallucination audits), not from that prior system, which had no output-quality
+eval of this kind. So Tier 2 is the part that is genuinely new rather than
+carried over.
+
 An eval is easy to make lie. I tried to defend against the standard ways:
 
 - **Gold set labeled from the source documents** (`eval/gold_set.yaml`), every

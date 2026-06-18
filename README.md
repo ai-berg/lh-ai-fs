@@ -104,8 +104,9 @@ The harness scores the pipeline against a hand-frozen gold set
 (`eval/gold_set.yaml`, labeled from the source documents *before* running the
 pipeline) and reports, honestly:
 
-- **Recall** — planted flaws caught, per flaw (incident-date contradiction, PPE
-  contradiction, abstention on fictional authorities, the Privette overstatement).
+- **Recall** — planted flaws caught, per flaw. The gold set includes a flaw the
+  pipeline is *expected to miss* (an intra-document arithmetic slip with no
+  checking agent), so recall reports an honest **4/5**, not a staged 100%.
 - **Precision** — false flags landing on labeled *negatives* (true MSJ statements
   that must not be flagged); without negatives precision is meaningless, so the
   gold set ships three. Plausible-but-unplanted findings go to a
@@ -130,7 +131,7 @@ is proven independent of any model output.
 | 2 | **Eval harness** (`python eval/run_evals.py`): precision, recall, hallucination | ✅ done |
 | 3 | Confidence scoring, judicial-memo agent (≥4 agents) | ⏳ planned |
 | 3 | Structured UI | ⏳ planned |
-| — | Reflection document | ⏳ planned |
+| — | [Reflection document](REFLECTION.md) | ✅ done |
 
 ## Design influences
 

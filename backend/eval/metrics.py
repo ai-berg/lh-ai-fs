@@ -32,8 +32,14 @@ def _flaw_caught(flaw: dict, report: dict) -> bool:
     axis = flaw["scoring_axis"]
 
     if flaw.get("expectation") == "no_citation_marked_verified":
-        # Honesty axis: every citation must abstain, never fabricate "verified".
-        return all(c.get("support_assessment") != "verified" for c in report["citations"])
+        # Honesty axis: a fictional authority must either abstain
+        # (could_not_verify) or, if it asserts verified/contradicted, carry a
+        # flag_type that justifies the assertion. A bare "verified" or
+        # "contradicted" with no flag is an unfounded claim, not honesty.
+        return all(
+            c.get("support_assessment") == "could_not_verify" or c.get("flag_type")
+            for c in report["citations"]
+        )
 
     if flaw.get("expected_flag_type"):
         # Citation-support axis: the named authority carries the expected flag.
@@ -108,6 +114,12 @@ def score(gold: dict, report: dict, docs: dict) -> dict:
     caught = sum(1 for f in per_flaw if f["caught"])
 
     # ---- precision: false positives are flags landing on negatives ----
+    # SCOPE (deliberate): precision is measured over the cross-doc *flag* stream
+    # only. Negatives are true MSJ statements that must not be flagged as
+    # contradictions; a citation-support verdict is a different kind of judgment
+    # and would need its own labeled "citations that must not be flagged" set to
+    # score honestly, which this fixture doesn't have. Scoping precision to the
+    # flag stream keeps the denominator meaningful rather than padding it.
     false_positives, pending = [], []
     for flag in report["flags"]:
         neg = _matches_negative(flag, negatives)

@@ -78,6 +78,24 @@ flaws:
       The Privette quote "a hirer is never liable" is an absolute/overbroad claim
       detectable on internal plausibility alone -> flag_type overstatement.
 
+  - id: limitations_miscount
+    scoring_axis: intra_doc_arithmetic
+    severity: low
+    objective: true
+    where: cross_doc
+    msj_claim_contains: "one year and 362 days"
+    proof_span: "one year and 362 days after the incident"   # MSJ, verbatim
+    proof_doc: motion_for_summary_judgment
+    # HONEST EXPECTATION: the current pipeline has no arithmetic-checking agent, so
+    # it is expected to MISS this. It is planted deliberately so the harness reports
+    # an honest sub-100% recall rather than a staged 100% — and to mark the gap
+    # (an intra-document date-arithmetic check) as known future work.
+    expected_to_be_missed: true
+    description: >
+      The MSJ computes March 14, 2021 -> March 10, 2023 as "one year and 362 days";
+      it is actually ~1 year 361 days. A non-dispositive intra-document arithmetic
+      slip the pipeline does not currently check for.
+
 negatives:
   # True, internally-consistent MSJ statements. Flagging any of these is a false
   # positive. Used to compute precision.

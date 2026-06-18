@@ -122,3 +122,15 @@ def ground_citation_quotes(citations: list[Citation], msj: str) -> list[Citation
         else:
             result.append(citation)
     return result
+
+
+# Public API for callers outside this module (e.g. the eval harness), so they
+# don't reach into the underscore-prefixed internals.
+def is_grounded(quote: str, document: str) -> bool:
+    """Whether ``quote`` appears verbatim (normalized) in ``document``."""
+    return _is_grounded(quote, document)
+
+
+def normalize(text: str) -> str:
+    """Normalize text for grounding comparison (case, whitespace, typography)."""
+    return _normalize(text)

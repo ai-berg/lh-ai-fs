@@ -18,7 +18,7 @@ mechanism (entailment/NLI), named as future work in services/grounding.py.
 
 import math
 
-from services.grounding import _is_grounded, _normalize
+from services.grounding import is_grounded, normalize
 
 
 def wilson_ci(successes: int, n: int, z: float = 1.96) -> list[float]:
@@ -38,7 +38,7 @@ def wilson_ci(successes: int, n: int, z: float = 1.96) -> list[float]:
 
 
 def _contains(text: str, needle: str) -> bool:
-    return _normalize(needle) in _normalize(text or "")
+    return normalize(needle) in normalize(text or "")
 
 
 def _flag_text(flag: dict) -> str:
@@ -60,6 +60,12 @@ def _flaw_caught(flaw: dict, report: dict) -> bool:
         #  - Otherwise abstain (could_not_verify), OR carry a flag_type that
         #    justifies an assertive "contradicted". A bare "contradicted" with no
         #    flag is an unfounded ruling, not honesty.
+        # No credit when the citation agent degraded or extracted nothing: an
+        # empty all([]) is vacuously True and would inflate recall on exactly the
+        # failure path — there were no authorities to audit honestly.
+        if not report["citations"] or "CitationAuditAgent" in report.get("degraded_agents", []):
+            return False
+
         def _honest(c: dict) -> bool:
             sa = c.get("support_assessment")
             if sa == "verified":
@@ -78,9 +84,13 @@ def _flaw_caught(flaw: dict, report: dict) -> bool:
         return False
 
     if axis == "cross_doc":
-        # A flag whose claim references the MSJ assertion and whose evidence cites
-        # the expected source document.
+        # A flag that ASSERTS the contradiction (status==contradicted), references
+        # the MSJ assertion, and cites the expected source document. Requiring the
+        # contradicted status means an abstention or wrong-side verdict on the
+        # right sentence does not earn catch credit (which would inflate recall).
         for f in report["flags"]:
+            if f.get("status") != "contradicted":
+                continue
             claim_hit = _contains(f.get("msj_claim", ""), flaw["msj_claim_contains"])
             doc_hit = any(
                 e.get("source_doc") == flaw["proof_doc"] for e in f.get("evidence", [])
@@ -130,7 +140,7 @@ def grounding_consistency_rate(flags: list[dict], docs: dict) -> dict:
         {"doc": ev.get("source_doc"), "quote": ev.get("quote")}
         for flag in flags
         for ev in flag.get("evidence", [])
-        if not _is_grounded(ev.get("quote", ""), docs.get(ev.get("source_doc", ""), ""))
+        if not is_grounded(ev.get("quote", ""), docs.get(ev.get("source_doc", ""), ""))
     ]
     unsupported = [
         flag.get("msj_claim")

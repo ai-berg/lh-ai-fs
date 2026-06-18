@@ -30,32 +30,48 @@ SNAPSHOT = BACKEND / "tests" / "fixtures" / "analyze_snapshot.json"
 PREGATE = BACKEND / "tests" / "fixtures" / "pregate_snapshot.json"
 
 
-def _load_report(live: bool) -> dict:
-    if not live:
-        return json.loads(SNAPSHOT.read_text())
-    from services.orchestrator import run_pipeline  # imported lazily (needs API key)
+def _load_run(live: bool, docs: dict):
+    """Return (report_dict, raw_findings) for one run.
 
-    report = asyncio.run(run_pipeline(load_documents()))
-    return report.model_dump()
-
-
-def _pre_post_gate(docs: dict, live: bool) -> dict:
-    """Ablation: grounding consistency in the RAW agent output vs the gated report.
-
-    Quantifies what the grounding gate removes. By default it uses committed
-    fixtures (pre-gate + post-gate snapshots) so the ablation appears with no API
-    spend; --live recomputes both from a fresh pipeline run.
+    Default: the committed post-gate snapshot + the committed pre-gate findings —
+    no API. Live: run the agents ONCE and derive both the grounded report and the
+    raw findings from that single run, so scoring and the ablation describe the
+    same pipeline invocation (and the agents aren't called twice).
     """
     if not live:
-        pre_flags = json.loads(PREGATE.read_text())["flags"]
-        post_flags = json.loads(SNAPSHOT.read_text())["flags"]
-    else:
-        from services.orchestrator import apply_grounding, run_agents
+        from schemas import Finding
 
-        citations, findings, _ = asyncio.run(run_agents(docs))
-        _, grounded = apply_grounding(citations, findings, docs)
-        pre_flags = [f.model_dump() for f in findings]
-        post_flags = [f.model_dump() for f in grounded]
+        report = json.loads(SNAPSHOT.read_text())
+        raw = [Finding(**f) for f in json.loads(PREGATE.read_text())["flags"]]
+        return report, raw
+
+    from services.orchestrator import apply_grounding, run_agents
+
+    citations, findings, degraded = asyncio.run(run_agents(docs))
+    grounded_citations, grounded = apply_grounding(citations, findings, docs)
+    report = {
+        "citations": [c.model_dump() for c in grounded_citations],
+        "flags": [f.model_dump() for f in grounded],
+        "degraded_agents": degraded,
+    }
+    return report, findings
+
+
+def _pre_post_gate(docs: dict, raw_findings) -> dict:
+    """Ablation: apply the grounding gate to the SAME raw findings and diff.
+
+    Both sides come from one set of raw (pre-gate) findings: the post-gate side is
+    that exact input passed through ``apply_grounding`` — never an unrelated
+    snapshot — so the delta honestly reflects what the gate did to this run.
+    Default uses the committed pre-gate fixture (no API); --live passes fresh
+    findings already captured by the scored run (so the agents aren't re-run).
+    """
+    from services.orchestrator import apply_grounding
+
+    pre = list(raw_findings)
+    _, post = apply_grounding([], pre, docs)
+    pre_flags = [f.model_dump() for f in pre]
+    post_flags = [f.model_dump() for f in post]
 
     # A finding whose status survives as assertive (not could_not_verify) is one
     # the gate "kept"; the delta of assertive flags shows the gate dropping a
@@ -82,7 +98,7 @@ def main() -> int:
 
     gold = yaml.safe_load(GOLD.read_text())
     docs = load_documents()
-    report = _load_report(args.live)
+    report, raw_findings = _load_run(args.live, docs)
     r = score(gold, report, docs)
 
     rec, prec, gc = r["recall"], r["precision"], r["grounding_consistency"]
@@ -118,10 +134,10 @@ def main() -> int:
     for c in gc["unsupported_detail"]:
         print(f"  UNSUPPORTED ASSERTION: {c}")
 
-    # Ablation always runs: from committed pre/post fixtures by default (no API),
-    # recomputed live with --live.
-    ab = _pre_post_gate(docs, args.live)
-    src = "live" if args.live else "committed pre-gate vs post-gate fixtures"
+    # Ablation always runs, applying the gate to the SAME raw findings used above
+    # (committed pre-gate fixture by default; the live run's raw findings under --live).
+    ab = _pre_post_gate(docs, raw_findings)
+    src = "live" if args.live else "committed pre-gate fixture -> grounding gate"
     quotes_removed = ab["pre"]["ungrounded_quotes"] - ab["post"]["ungrounded_quotes"]
     flags_dropped = ab["pre_assertive"] - ab["post_assertive"]
     print(

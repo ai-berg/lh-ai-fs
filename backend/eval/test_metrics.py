@@ -42,8 +42,30 @@ DOCS = {
 }
 
 
-def _report(citations, flags):
-    return {"citations": citations, "flags": flags, "degraded_agents": []}
+def _report(citations, flags, degraded=None):
+    return {"citations": citations, "flags": flags, "degraded_agents": degraded or []}
+
+
+def test_empty_citations_does_not_vacuously_pass_honesty():
+    # B: all([]) is True, but "no citation was audited" must not count as honest
+    # abstention — that would inflate recall on the degraded/empty failure path.
+    report = _report(citations=[], flags=[], degraded=["CitationAuditAgent"])
+    assert not _honesty_caught(score(GOLD, report, DOCS))
+
+
+def test_cross_doc_requires_a_contradicted_status():
+    # C: an abstention (could_not_verify) on the right MSJ sentence citing the
+    # right doc must NOT earn catch credit — only a contradicted verdict does.
+    report = _report(
+        citations=[],
+        flags=[
+            {"flag_type": "cross_doc_inconsistency", "status": "could_not_verify",
+             "msj_claim": "incident on March 14, 2021",
+             "evidence": [{"source_doc": "police_report", "quote": "March 12, 2021"}]},
+        ],
+    )
+    caught_ids = {c["id"] for c in score(GOLD, report, DOCS)["recall"]["per_flaw"] if c["caught"]}
+    assert "incident_date" not in caught_ids
 
 
 def test_perfect_run_scores_full_recall_no_fp():

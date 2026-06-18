@@ -25,13 +25,18 @@ CitationAgent = Callable[[dict[str, str]], Awaitable[list[Citation]]]
 CrossDocAgent = Callable[[dict[str, str]], Awaitable[list[Finding]]]
 
 
-async def run_pipeline(
+async def run_agents(
     docs: dict[str, str],
     *,
     citation_agent: CitationAgent | None = None,
     cross_doc_agent: CrossDocAgent | None = None,
-) -> VerificationReport:
-    """Run the Phase 1 pipeline and return a grounded VerificationReport."""
+) -> tuple[list[Citation], list[Finding], list[str]]:
+    """Run the agents and return their RAW (pre-grounding) output.
+
+    Split out from ``run_pipeline`` so the eval harness can measure the model's
+    pre-gate fabrication propensity — the findings before the grounding gate
+    clears unverifiable quotes — and compare it against the post-gate report.
+    """
     if citation_agent is None or cross_doc_agent is None:
         # Imported lazily so tests can inject fakes without an OpenAI client.
         from services.agents.citation_audit import audit_citations
@@ -41,26 +46,33 @@ async def run_pipeline(
         cross_doc_agent = cross_doc_agent or check_cross_doc_consistency
 
     degraded: list[str] = []
-
     citations, findings = await asyncio.gather(
-        run_agent(
-            "CitationAuditAgent",
-            lambda: citation_agent(docs),
-            fallback=[],
-            degraded=degraded,
-        ),
-        run_agent(
-            "CrossDocConsistencyAgent",
-            lambda: cross_doc_agent(docs),
-            fallback=[],
-            degraded=degraded,
-        ),
+        run_agent("CitationAuditAgent", lambda: citation_agent(docs), fallback=[], degraded=degraded),
+        run_agent("CrossDocConsistencyAgent", lambda: cross_doc_agent(docs), fallback=[], degraded=degraded),
     )
+    return citations, findings, degraded
 
-    # Ground both paths: cross-doc findings against their source docs, and
-    # citation direct quotes against the MSJ itself.
+
+def apply_grounding(
+    citations: list[Citation], findings: list[Finding], docs: dict[str, str]
+) -> tuple[list[Citation], list[Finding]]:
+    """Apply the grounding gate to raw agent output (the post-gate transform)."""
     grounded = [validate_grounding(f, docs) for f in findings]
     citations = ground_citation_quotes(citations, docs.get(MSJ_DOC, ""))
+    return citations, grounded
+
+
+async def run_pipeline(
+    docs: dict[str, str],
+    *,
+    citation_agent: CitationAgent | None = None,
+    cross_doc_agent: CrossDocAgent | None = None,
+) -> VerificationReport:
+    """Run the pipeline and return a grounded VerificationReport."""
+    citations, findings, degraded = await run_agents(
+        docs, citation_agent=citation_agent, cross_doc_agent=cross_doc_agent
+    )
+    citations, grounded = apply_grounding(citations, findings, docs)
 
     if "CitationAuditAgent" not in degraded and len(citations) < EXPECTED_MIN_CITATIONS:
         logger.warning(
@@ -68,8 +80,4 @@ async def run_pipeline(
             extra={"got": len(citations), "expected_min": EXPECTED_MIN_CITATIONS},
         )
 
-    return VerificationReport(
-        citations=citations,
-        flags=grounded,
-        degraded_agents=degraded,
-    )
+    return VerificationReport(citations=citations, flags=grounded, degraded_agents=degraded)

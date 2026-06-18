@@ -22,7 +22,7 @@ HERE = Path(__file__).resolve().parent
 BACKEND = HERE.parent
 sys.path.insert(0, str(BACKEND))
 
-from eval.metrics import score  # noqa: E402
+from eval.metrics import hallucination_rate, score  # noqa: E402
 from repositories.document_repository import load_documents  # noqa: E402
 
 GOLD = HERE / "gold_set.yaml"
@@ -36,6 +36,21 @@ def _load_report(live: bool) -> dict:
 
     report = asyncio.run(run_pipeline(load_documents()))
     return report.model_dump()
+
+
+def _pre_post_gate(docs: dict) -> dict:
+    """Ablation: hallucination rate in the RAW agent output vs the gated report.
+
+    Quantifies what the grounding gate removes. Only meaningful live, since it
+    needs the pre-gate agent output the report doesn't preserve.
+    """
+    from services.orchestrator import apply_grounding, run_agents
+
+    citations, findings, _ = asyncio.run(run_agents(docs))
+    pre = hallucination_rate([f.model_dump() for f in findings], docs)
+    _, grounded = apply_grounding(citations, findings, docs)
+    post = hallucination_rate([f.model_dump() for f in grounded], docs)
+    return {"pre": pre, "post": post}
 
 
 def _pct(x) -> str:
@@ -75,11 +90,25 @@ def main() -> int:
     for u in hal["detail"]:
         print(f"  UNGROUNDED in {u['doc']}: {u['quote'][:70]}")
 
-    print(
-        "\nNote: post-gate hallucination is ~0 by construction — the grounding gate"
-        "\nclears ungrounded quotes before they reach the report. Run with --live and"
-        "\ncompare a raw (pre-gate) capture to quantify the gate's contribution.\n"
-    )
+    if args.live:
+        # Ablation: does the grounding gate actually remove fabricated quotes?
+        ab = _pre_post_gate(docs)
+        print(
+            f"\nGROUNDING-GATE ABLATION (live)"
+            f"\n  pre-gate  (raw model):  {_pct(ab['pre']['rate'])}"
+            f"   {ab['pre']['ungrounded_quotes']}/{ab['pre']['total_quotes']} quotes"
+            f"\n  post-gate (shipped):    {_pct(ab['post']['rate'])}"
+            f"   {ab['post']['ungrounded_quotes']}/{ab['post']['total_quotes']} quotes"
+            f"\n  -> the gate removed {ab['pre']['ungrounded_quotes'] - ab['post']['ungrounded_quotes']}"
+            f" ungrounded quote(s) before they reached the report."
+        )
+    else:
+        print(
+            "\nNote: post-gate hallucination is ~0 by construction — the grounding gate"
+            "\nclears ungrounded quotes before they reach the report. Run with --live to"
+            "\nsee the pre-gate vs post-gate ablation that quantifies the gate."
+        )
+    print()
     return 0
 
 

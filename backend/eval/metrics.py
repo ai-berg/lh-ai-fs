@@ -77,6 +77,27 @@ def _matches_any_flaw(flag: dict, flaws: list[dict]) -> bool:
     return False
 
 
+def hallucination_rate(flags: list[dict], docs: dict) -> dict:
+    """Fraction of cited quotes that don't literally exist in their source.
+
+    Works on either pre-gate (raw agent) or post-gate (report) findings, so the
+    harness can quantify what the grounding gate removes.
+    """
+    ungrounded = [
+        {"doc": ev.get("source_doc"), "quote": ev.get("quote")}
+        for flag in flags
+        for ev in flag.get("evidence", [])
+        if not _is_grounded(ev.get("quote", ""), docs.get(ev.get("source_doc", ""), ""))
+    ]
+    total = sum(len(f.get("evidence", [])) for f in flags)
+    return {
+        "rate": (len(ungrounded) / total) if total else 0.0,
+        "ungrounded_quotes": len(ungrounded),
+        "total_quotes": total,
+        "detail": ungrounded,
+    }
+
+
 def score(gold: dict, report: dict, docs: dict) -> dict:
     flaws = gold["flaws"]
     negatives = gold.get("negatives", [])
@@ -100,14 +121,8 @@ def score(gold: dict, report: dict, docs: dict) -> dict:
     denom = true_positives + len(false_positives)
     precision = (true_positives / denom) if denom else None
 
-    # ---- hallucination: cited quotes absent from their source ----
-    ungrounded = []
-    for flag in report["flags"]:
-        for ev in flag.get("evidence", []):
-            if not _is_grounded(ev.get("quote", ""), docs.get(ev.get("source_doc", ""), "")):
-                ungrounded.append({"doc": ev.get("source_doc"), "quote": ev.get("quote")})
-    total_quotes = sum(len(f.get("evidence", [])) for f in report["flags"])
-    halluc_rate = (len(ungrounded) / total_quotes) if total_quotes else 0.0
+    # ---- hallucination: cited quotes absent from their source (post-gate) ----
+    halluc = hallucination_rate(report["flags"], docs)
 
     return {
         "recall": {"caught": caught, "total": len(flaws), "per_flaw": per_flaw},
@@ -118,10 +133,5 @@ def score(gold: dict, report: dict, docs: dict) -> dict:
             "fp_detail": false_positives,
             "pending_adjudication": pending,
         },
-        "hallucination": {
-            "rate": halluc_rate,
-            "ungrounded_quotes": len(ungrounded),
-            "total_quotes": total_quotes,
-            "detail": ungrounded,
-        },
+        "hallucination": halluc,
     }

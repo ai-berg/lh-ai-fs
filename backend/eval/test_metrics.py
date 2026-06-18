@@ -332,6 +332,42 @@ def test_overstatement_without_quote_is_flagged_malformed():
     assert r["citation_support"]["flag_type_distribution"].get("overstatement") == 1
 
 
+def test_is_direct_quote_true_does_not_mask_missing_quote():
+    # A truthy is_direct_quote with empty quoted_text is exactly the malformed case —
+    # the boolean must NOT suppress the diagnostic.
+    report = _report(
+        citations=[{"authority": "Whitmore v. X", "support_assessment": "could_not_verify",
+                    "flag_type": "overstatement", "quoted_text": None, "is_direct_quote": True}],
+        flags=[],
+    )
+    r = score(GOLD, report, DOCS)
+    assert len(r["citation_support"]["malformed_overstatements"]) == 1
+
+
+def test_duplicate_authority_does_not_satisfy_coverage_for_a_missing_sibling():
+    # Coverage must be by DISTINCT target: two Whitmore entries can't stand in for a
+    # missing Kellerman even though len(scoped) == len(targets).
+    gold = {
+        "flaws": [{
+            "id": "fictional_authorities", "scoring_axis": "honesty", "where": "citation",
+            "expectation": "no_citation_marked_verified", "min_citations": 1,
+            "fictional_authorities": ["Whitmore", "Kellerman"],
+        }],
+        "negatives": [],
+    }
+    report = _report(
+        citations=[
+            {"authority": "Whitmore v. X", "support_assessment": "could_not_verify",
+             "flag_type": None, "quoted_text": None},
+            {"authority": "Whitmore v. X (again)", "support_assessment": "could_not_verify",
+             "flag_type": None, "quoted_text": None},
+        ],
+        flags=[],
+    )
+    caught = {c["id"] for c in score(gold, report, DOCS)["recall"]["per_flaw"] if c["caught"]}
+    assert "fictional_authorities" not in caught  # Kellerman never covered
+
+
 def test_wilson_ci_widens_on_tiny_n():
     from eval.metrics import wilson_ci
 

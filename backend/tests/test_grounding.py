@@ -186,6 +186,22 @@ def test_superscript_footnote_marker_does_not_fold_into_a_digit():
     assert result.evidence == []
 
 
+def test_pdf_ligatures_still_ground_under_nfc():
+    # NFC keeps superscripts distinct (good) but, unlike NFKC, would drop ligature
+    # folding; we re-add it explicitly. A model quote in plain "office fly" must
+    # still ground against a PDF source that emitted ﬁ/ﬂ ligatures.
+    docs = {"police_report": "The oﬃce reviewed the ﬂight log."}  # ﬃ, ﬂ ligatures
+    finding = _finding(
+        VerificationStatus.CONTRADICTED,
+        [("police_report", "the office reviewed the flight log")],
+    )
+
+    result = validate_grounding(finding, docs)
+
+    assert result.status == VerificationStatus.CONTRADICTED
+    assert len(result.evidence) == 1
+
+
 def test_could_not_verify_keeps_a_grounded_quote():
     # If the quote does exist, there's no reason to strip it.
     finding = _finding(

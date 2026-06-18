@@ -15,11 +15,18 @@ assistant against prompt injection in untrusted case-file text.
 import re
 from uuid import uuid4
 
-# Document keys are interpolated raw into <{name}> tags below. That is safe ONLY
-# because the names are operator-controlled filesystem stems, never untrusted input
-# — assert it so the trust boundary is enforced, not just assumed. A key with angle
-# brackets or markup could otherwise break out of the tag structure.
-_DOC_KEY_RE = re.compile(r"^[a-z0-9_]+$")
+# Document keys are interpolated into <{name}> tags below. Common corpus filenames
+# carry hyphens, capitals, or spaces (e.g. "police-report", "MedicalRecords",
+# "exhibit 1"), so REJECTING those would degrade the agent on an ordinary file. We
+# instead SANITIZE the tag name to a safe slug while keeping the document readable —
+# any char outside [a-z0-9_] becomes "_", so markup can't break out of the tag, and
+# no legitimate filename is lost. The trust boundary is enforced, not assumed.
+_UNSAFE_TAG_CHARS = re.compile(r"[^a-z0-9_]+")
+
+
+def _safe_tag(name: str) -> str:
+    slug = _UNSAFE_TAG_CHARS.sub("_", name.lower()).strip("_")
+    return slug or "document"
 
 # Instructions live in the SYSTEM message; untrusted documents go in the USER
 # message (see build_messages). Models privilege system over user, so keeping the
@@ -111,14 +118,12 @@ def build_messages(system_template: str, **documents: str) -> list[dict]:
     """
     fenced = []
     for name, text in documents.items():
-        # The name is operator-controlled (a filesystem stem), but enforce that
-        # invariant rather than trusting it: the name goes into <{name}> tags, so a
-        # name with markup could break the structure. Document text is untrusted but
-        # safe — it lives inside the random fence, never in tag position.
-        if not _DOC_KEY_RE.match(name):
-            raise ValueError(f"invalid document key {name!r}: expected [a-z0-9_]+")
+        # Sanitize the name into the tag (markup can't break out), but keep the doc.
+        # The document TEXT is untrusted yet safe — it lives inside the random fence,
+        # never in tag position, so an injection in the body can't forge structure.
+        tag = _safe_tag(name)
         marker = uuid4().hex  # one marker per document; BEGIN and END must match
-        fenced.append(f"<{name}>\n[BEGIN-{marker}]\n{text}\n[END-{marker}]\n</{name}>")
+        fenced.append(f"<{tag}>\n[BEGIN-{marker}]\n{text}\n[END-{marker}]\n</{tag}>")
     return [
         {"role": "system", "content": system_template},
         {"role": "user", "content": "\n\n".join(fenced)},

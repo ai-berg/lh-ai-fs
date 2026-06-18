@@ -49,6 +49,16 @@ _TYPOGRAPHIC = str.maketrans(
 )
 
 
+# Latin ligatures PDF extraction emits as single codepoints. NFKC used to fold these
+# for free; since we dropped to NFC (to keep superscript footnote markers distinct,
+# see _normalize), fold them EXPLICITLY so a model quote written "office"/"flag" still
+# grounds against a source that used ﬁ/ﬂ. Surgical opposite of the superscript case:
+# we WANT ligature unification, we do NOT want digit/superscript unification.
+_LIGATURES = str.maketrans({
+    "ﬁ": "fi", "ﬂ": "fl", "ﬀ": "ff", "ﬃ": "ffi", "ﬄ": "ffl", "ﬅ": "st", "ﬆ": "st",
+})
+
+
 def _normalize(text: str) -> str:
     """Lowercase, fold typographic variants, and collapse whitespace.
 
@@ -59,10 +69,10 @@ def _normalize(text: str) -> str:
     NFKC `is_grounded("day 21", "day 2¹")` would return True — grounding a fabricated
     number against a footnote-marked source. NFC keeps superscripts distinct, so a
     quote that swaps a footnote marker for a real digit is correctly rejected. The
-    explicit _TYPOGRAPHIC table still handles the benign quote/dash/ellipsis variants
-    we DO want to forgive.
+    explicit _TYPOGRAPHIC and _LIGATURES tables still handle the benign quote/dash/
+    ellipsis/ligature variants we DO want to forgive (the part NFKC gave for free).
     """
-    text = unicodedata.normalize("NFC", text).translate(_TYPOGRAPHIC)
+    text = unicodedata.normalize("NFC", text).translate(_TYPOGRAPHIC).translate(_LIGATURES)
     return re.sub(r"\s+", " ", text).strip().lower()
 
 

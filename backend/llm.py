@@ -21,7 +21,17 @@ STRUCTURED_MODEL = os.getenv("STRUCTURED_MODEL", "gpt-5.5")
 # operator can raise it for a larger corpus without a code change. Without a cap, a
 # truncated parse raises LengthFinishReasonError and the WHOLE agent degrades to []
 # — better to fail loudly with a typed error the orchestrator can record.
-MAX_COMPLETION_TOKENS = int(os.getenv("STRUCTURED_MAX_TOKENS", "8000"))
+def _max_completion_tokens() -> int:
+    # Parse defensively: this is an optional tuning knob, so an empty/non-numeric
+    # override must not crash module import (which would kill the app before the
+    # agent-level degraded fallback could ever run). Fall back to the default.
+    try:
+        return int(os.getenv("STRUCTURED_MAX_TOKENS", "8000"))
+    except ValueError:
+        return 8000
+
+
+MAX_COMPLETION_TOKENS = _max_completion_tokens()
 
 T = TypeVar("T", bound=BaseModel)
 

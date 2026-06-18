@@ -85,11 +85,18 @@ def _flaw_caught(flaw: dict, report: dict) -> bool:
         # actually extracted before crediting "they all abstained". A total-count
         # check (len(cites) >= min_citations) does NOT do this — a run could extract
         # 11 citations, only 2 of them fabricated (both abstaining) plus 9 real ones
-        # asserted "verified", and still pass. So gate on coverage of the LIST: every
-        # named fabricated authority must appear in the extraction. min_citations is
-        # kept only as a secondary breadth floor.
-        if targets and len(scoped) < len(targets):
-            return False
+        # asserted "verified", and still pass. Gate on coverage of the LIST by
+        # DISTINCT target: every named fabricated authority must be matched by at
+        # least one citation. Counting len(scoped) would let two duplicate entries of
+        # one authority stand in for a missing sibling (len==targets without full
+        # coverage); count distinct targets matched instead.
+        if targets:
+            covered = sum(
+                1 for a in targets
+                if any(_contains(c.get("authority", ""), a) for c in cites)
+            )
+            if covered < len(targets):
+                return False
         min_cov = flaw.get("min_citations", 1)
         if len(cites) < min_cov or not scoped:
             return False
@@ -313,11 +320,14 @@ def score(gold: dict, report: dict, docs: dict) -> dict:
     # citation flagged overstatement with quoted_text empty is an unsupported verdict.
     # We surface the count (and the flag_type distribution) so the report can't hide
     # a stream of quote-free overstatements behind an unscored axis.
+    # Require a non-empty quoted_text REGARDLESS of the is_direct_quote boolean: an
+    # overstatement is a verdict about the quote's wording, so the quote must be
+    # present. A truthy is_direct_quote with an empty quoted_text is exactly the
+    # malformed case this diagnostic exists to catch, so it must not suppress it.
     citation_issues = [
         {"authority": c.get("authority"), "flag_type": c.get("flag_type")}
         for c in report["citations"]
-        if c.get("flag_type") == "overstatement"
-        and not (c.get("quoted_text") or c.get("is_direct_quote"))
+        if c.get("flag_type") == "overstatement" and not c.get("quoted_text")
     ]
     flag_type_dist: dict[str, int] = {}
     for c in report["citations"]:

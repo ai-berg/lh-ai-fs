@@ -56,3 +56,14 @@ def test_a_forged_fence_in_the_document_cannot_match_the_real_sentinel():
     real_sentinel = roles["user"].split("[BEGIN-", 1)[1].split("]", 1)[0]
     assert real_sentinel != "deadbeef"
     assert forged in roles["user"]  # the forged marker is just inert data
+
+
+def test_common_filename_stems_are_sanitized_not_rejected():
+    # A corpus file like "police-report" / "Exhibit 1" must NOT degrade the agent;
+    # the tag is slugified to a safe form while the document is still included.
+    messages = build_messages(CITATION_AUDIT_SYSTEM, **{"police-report": "x", "Exhibit 1": "y"})
+    user = next(m["content"] for m in messages if m["role"] == "user")
+    assert "<police_report>" in user and "</police_report>" in user
+    assert "<exhibit_1>" in user and "</exhibit_1>" in user
+    # Both documents survived (two fences).
+    assert user.count("[BEGIN-") == 2

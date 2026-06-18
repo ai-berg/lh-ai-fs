@@ -27,6 +27,7 @@ from repositories.document_repository import load_documents  # noqa: E402
 
 GOLD = HERE / "gold_set.yaml"
 SNAPSHOT = BACKEND / "tests" / "fixtures" / "analyze_snapshot.json"
+PREGATE = BACKEND / "tests" / "fixtures" / "pregate_snapshot.json"
 
 
 def _load_report(live: bool) -> dict:
@@ -38,12 +39,21 @@ def _load_report(live: bool) -> dict:
     return report.model_dump()
 
 
-def _pre_post_gate(docs: dict) -> dict:
-    """Ablation: hallucination rate in the RAW agent output vs the gated report.
+def _pre_post_gate(docs: dict, live: bool) -> dict:
+    """Ablation: grounding consistency in the RAW agent output vs the gated report.
 
-    Quantifies what the grounding gate removes. Only meaningful live, since it
-    needs the pre-gate agent output the report doesn't preserve.
+    Quantifies what the grounding gate removes. By default it uses committed
+    fixtures (pre-gate + post-gate snapshots) so the ablation appears with no API
+    spend; --live recomputes both from a fresh pipeline run.
     """
+    if not live:
+        pre_flags = json.loads(PREGATE.read_text())["flags"]
+        post_flags = json.loads(SNAPSHOT.read_text())["flags"]
+        return {
+            "pre": grounding_consistency_rate(pre_flags, docs),
+            "post": grounding_consistency_rate(post_flags, docs),
+        }
+
     from services.orchestrator import apply_grounding, run_agents
 
     citations, findings, _ = asyncio.run(run_agents(docs))
@@ -92,29 +102,27 @@ def main() -> int:
 
     print(f"\nGROUNDING CONSISTENCY (cited quotes absent from source)   {_pct(gc['rate'])}"
           f"   {gc['ungrounded_quotes']}/{gc['total_quotes']} quotes")
-    print("  (this re-runs the pipeline's OWN grounding check — a regression guard,"
-          " not an independent hallucination oracle; ~0 post-gate by construction.)")
+    print(f"  unsupported assertions (assertive finding, no evidence)   {gc['unsupported_assertions']}")
+    print("  (re-runs the pipeline's OWN grounding check — a regression guard, not an"
+          " independent hallucination oracle; ~0 post-gate by construction.)")
     for u in gc["detail"]:
         print(f"  UNGROUNDED in {u['doc']}: {u['quote'][:70]}")
+    for c in gc["unsupported_detail"]:
+        print(f"  UNSUPPORTED ASSERTION: {c}")
 
-    if args.live:
-        # Ablation: does the grounding gate actually remove fabricated quotes?
-        ab = _pre_post_gate(docs)
-        print(
-            f"\nGROUNDING-GATE ABLATION (live)"
-            f"\n  pre-gate  (raw model):  {_pct(ab['pre']['rate'])}"
-            f"   {ab['pre']['ungrounded_quotes']}/{ab['pre']['total_quotes']} quotes"
-            f"\n  post-gate (shipped):    {_pct(ab['post']['rate'])}"
-            f"   {ab['post']['ungrounded_quotes']}/{ab['post']['total_quotes']} quotes"
-            f"\n  -> the gate removed {ab['pre']['ungrounded_quotes'] - ab['post']['ungrounded_quotes']}"
-            f" ungrounded quote(s) before they reached the report."
-        )
-    else:
-        print(
-            "\nNote: grounding consistency is ~0 post-gate by construction. Run with"
-            "\n--live for the pre-gate vs post-gate ablation that shows what the gate"
-            "\nactually removes from the raw model output."
-        )
+    # Ablation always runs: from committed pre/post fixtures by default (no API),
+    # recomputed live with --live.
+    ab = _pre_post_gate(docs, args.live)
+    src = "live" if args.live else "committed pre-gate vs post-gate fixtures"
+    print(
+        f"\nGROUNDING-GATE ABLATION ({src})"
+        f"\n  pre-gate  (raw model):  {_pct(ab['pre']['rate'])}"
+        f"   {ab['pre']['ungrounded_quotes']}/{ab['pre']['total_quotes']} quotes"
+        f"\n  post-gate (shipped):    {_pct(ab['post']['rate'])}"
+        f"   {ab['post']['ungrounded_quotes']}/{ab['post']['total_quotes']} quotes"
+        f"\n  -> the gate removed {ab['pre']['ungrounded_quotes'] - ab['post']['ungrounded_quotes']}"
+        f" ungrounded quote(s) before they reached the report."
+    )
     print()
     return 0
 

@@ -110,12 +110,21 @@ def _matches_any_flaw(flag: dict, flaws: list[dict]) -> bool:
     return False
 
 
-def grounding_consistency_rate(flags: list[dict], docs: dict) -> dict:
-    """Fraction of cited quotes that don't literally exist in their source.
+_ASSERTIVE = {"contradicted", "verified"}
 
-    Works on either pre-gate (raw agent) or post-gate (report) findings, so the
-    harness can quantify what the grounding gate removes (the --live ablation).
-    Not an independent hallucination measure — see the module docstring.
+
+def grounding_consistency_rate(flags: list[dict], docs: dict) -> dict:
+    """Quote-grounding + unsupported-assertion checks over a finding list.
+
+    Two fabrication signals, on either pre-gate (raw agent) or post-gate (report)
+    findings:
+      - ungrounded_quotes: cited quotes that don't literally exist in their source
+        (the --live ablation quantity). Not an independent oracle — see module doc.
+      - unsupported_assertions: findings that assert contradicted/verified while
+        citing NO evidence. A fabricated *finding* carries no quote for the
+        grounding check to catch, so it would otherwise be invisible. (~0 on the
+        shipped report, since the Finding validator downgrades these — measured
+        here so a regression in that validator can't hide.)
     """
     ungrounded = [
         {"doc": ev.get("source_doc"), "quote": ev.get("quote")}
@@ -123,11 +132,18 @@ def grounding_consistency_rate(flags: list[dict], docs: dict) -> dict:
         for ev in flag.get("evidence", [])
         if not _is_grounded(ev.get("quote", ""), docs.get(ev.get("source_doc", ""), ""))
     ]
+    unsupported = [
+        flag.get("msj_claim")
+        for flag in flags
+        if flag.get("status") in _ASSERTIVE and not flag.get("evidence")
+    ]
     total = sum(len(f.get("evidence", [])) for f in flags)
     return {
         "rate": (len(ungrounded) / total) if total else 0.0,
         "ungrounded_quotes": len(ungrounded),
         "total_quotes": total,
+        "unsupported_assertions": len(unsupported),
+        "unsupported_detail": unsupported,
         "detail": ungrounded,
     }
 

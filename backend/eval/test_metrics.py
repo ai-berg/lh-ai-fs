@@ -170,6 +170,35 @@ def test_ungrounded_quote_counts_against_grounding_consistency():
     assert r["grounding_consistency"]["ungrounded_quotes"] == 1
 
 
+def test_assertive_finding_without_evidence_is_an_unsupported_assertion():
+    # A fabricated *finding* — asserts a contradiction but cites nothing — must be
+    # counted, even though it carries no ungrounded quote for the grounding check
+    # to catch. This covers "fabricating findings", not just fabricating quotes.
+    report = _report(
+        citations=[],
+        flags=[
+            {"flag_type": "factual_contradiction", "status": "contradicted",
+             "msj_claim": "asserts a conflict with no proof", "evidence": []},
+        ],
+    )
+
+    r = score(GOLD, report, DOCS)
+
+    assert r["grounding_consistency"]["unsupported_assertions"] == 1
+
+
+def test_grounded_finding_is_not_an_unsupported_assertion():
+    report = _report(
+        citations=[],
+        flags=[
+            {"flag_type": "factual_contradiction", "status": "contradicted",
+             "msj_claim": "x",
+             "evidence": [{"source_doc": "police_report", "quote": "March 12, 2021"}]},
+        ],
+    )
+    assert score(GOLD, report, DOCS)["grounding_consistency"]["unsupported_assertions"] == 0
+
+
 def test_wilson_ci_widens_on_tiny_n():
     from eval.metrics import wilson_ci
 

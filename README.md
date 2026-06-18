@@ -96,8 +96,12 @@ the PPE contradiction caught). Regenerate it with
 ## Evals
 
 ```bash
+# In the container (Docker-first):
 docker compose exec backend python eval/run_evals.py          # score the committed snapshot (reproducible, no API)
 docker compose exec backend python eval/run_evals.py --live   # run the real pipeline, then score (spends API)
+
+# Or on the host, no Docker (a root shim delegates to backend/eval/run_evals.py):
+pip install -r backend/requirements.txt && python run_evals.py
 ```
 
 The harness scores the pipeline against a hand-frozen gold set
@@ -112,10 +116,11 @@ pipeline) and reports, honestly:
   gold set ships three. Plausible-but-unplanted findings go to a
   `pending_adjudication` bucket — scored neither right nor wrong, so the number
   isn't gamed in either direction.
-- **Hallucination rate** — cited quotes that don't literally exist in their source
-  (reusing the pipeline's own grounding check as an independent verifier). This is
-  ~0 post-gate by construction; the report says so, and `--live` lets you compare
-  against a raw pre-gate capture to quantify the gate's contribution.
+- **Grounding consistency** — cited quotes that don't literally exist in their
+  source. This re-runs the pipeline's *own* grounding check, so it is a regression
+  guard, **not** an independent hallucination oracle: it is ~0 post-gate by
+  construction (the report says so), and `--live` runs the pre-gate vs post-gate
+  ablation that shows what the gate actually removes from the raw model output.
 
 The metric arithmetic has its own unit tests (`eval/test_metrics.py`) on synthetic
 true-positive / false-positive / miss / hallucination cases, so the scoring logic

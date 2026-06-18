@@ -19,8 +19,10 @@ function App() {
         throw new Error(`Server responded with ${response.status}`)
       }
 
+      // The /analyze endpoint returns the VerificationReport at the top level
+      // ({ citations, flags, degraded_agents }), not wrapped in a `report` key.
       const data = await response.json()
-      setReport(data.report)
+      setReport(data)
     } catch (err) {
       setError(err.message)
     } finally {

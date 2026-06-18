@@ -1,100 +1,129 @@
 # BS Detector
 
-Legal briefs lie. Not always intentionally — but they do. They cite cases that don't say what they claim. They quote authority with words quietly removed. They state facts that contradict the documents sitting right next to them.
+A multi-agent pipeline that audits a legal **Motion for Summary Judgment** (MSJ)
+against the surrounding case file and reports where the brief misstates its
+authorities or contradicts the record — the *epistemic work* of checking
+citations and record cites, returned as structured, source-grounded JSON.
 
-Your task: build an AI pipeline that catches it.
+> **Status:** Tier 1 (core pipeline) is implemented and tested. The eval harness
+> (Tier 2) and the additional agents / UI (Tier 3) are in progress — see
+> [Roadmap](#roadmap).
 
-## Setup
+## What it does
 
-### Docker (recommended)
+`POST /analyze` runs the case documents in `backend/documents/` through a
+multi-agent pipeline and returns a `VerificationReport`:
+
+- **Citation Audit Agent** — extracts every legal authority cited in the MSJ,
+  assesses (on internal plausibility) whether it supports the proposition it is
+  cited for, and flags direct-quote overstatements (e.g. an absolute "a hirer is
+  *never* liable"). Authorities it cannot confirm are reported as
+  `could_not_verify` — never fabricated as `verified`.
+- **Cross-Document Consistency Agent** — contrasts the MSJ's factual assertions
+  against the police report, medical records, and witness statement, citing the
+  **minimal verbatim span** that contains each conflict (e.g. the incident date,
+  whether fall-arrest PPE was worn).
+
+Every finding is **grounded**: a quote that does not literally exist in its cited
+source document is rejected and the finding collapses to `could_not_verify`. This
+is the anti-hallucination guarantee — the pipeline points at real text or admits
+uncertainty.
+
+## Architecture
+
+```
+POST /analyze
+   └─ orchestrator.run_pipeline(docs)
+        ├─ CitationAuditAgent        ─┐  (fan out concurrently)
+        └─ CrossDocConsistencyAgent  ─┘
+              └─ grounding.validate_grounding()   ← drops ungrounded findings
+        → VerificationReport { citations, flags, degraded_agents }
+```
+
+- **Routes → Services → Repositories.** `main.py` is a thin route; agents and
+  orchestration live in `services/`; document loading in `repositories/`.
+- **Structured data between agents** (Pydantic models in `schemas.py`), never raw
+  text blobs. Uses OpenAI **native structured outputs** — no heavyweight
+  framework.
+- **Resilient orchestration**: agents fan out concurrently; a failing agent is
+  recorded in `degraded_agents` and the pipeline still returns a valid report.
+- **Prompt-injection defense**: untrusted document text is fenced with a
+  per-request random sentinel before substitution (`prompts.py`).
+
+## Run it
+
+Requires **Docker Compose v2.24+** (the hardening override uses the `!override`
+merge tag).
 
 ```bash
-cp .env.example .env      # Add your OpenAI API key
+cp backend/.env.example .env      # add your OPENAI_API_KEY at the repo root
 docker compose up --build
 ```
 
-The API runs at `http://localhost:8002`. The UI runs at `http://localhost:5175`.
-
-Both services hot-reload — edit files on your host and changes appear automatically.
-
-### Manual Setup
-
-#### Backend
+The API runs at `http://localhost:8002` (published on loopback only). Try it:
 
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env      # Add your OpenAI API key
-uvicorn main:app --reload
+curl -X POST http://localhost:8002/analyze | jq
 ```
 
-The API runs at `http://localhost:8002`.
+> **Security note.** This repo runs third-party scaffold code, so it is hardened
+> via `docker-compose.override.yml` (non-root, dropped capabilities,
+> loopback-only ports, resource limits) and dependencies are installed at image
+> build time rather than at boot. Treat your `OPENAI_API_KEY` as exposed to the
+> sandboxed code: use a dedicated key with a low billing cap.
 
-#### Frontend
+## Tests
+
+Run inside the container (the project is Docker-first):
 
 ```bash
-cd frontend
-npm install
-npm run dev
+docker compose run --rm backend python -m pytest -q
 ```
 
-The UI runs at `http://localhost:5175`.
+Tests cover the deterministic core — the grounding layer (verbatim/normalized
+evidence checks) and orchestration resilience (graceful agent degradation) — so
+the safety-critical logic is verified without spending tokens. Agent behavior is
+validated end-to-end against the real case file.
 
-## The Task
+## Roadmap
 
-Inside `backend/documents/` you'll find a small case file: a Motion for Summary Judgment in a personal injury lawsuit (*Rivera v. Harmon Construction Group*), along with a police report, medical records, and a witness statement.
+| Tier | Item | Status |
+|------|------|--------|
+| 1 | Citation extraction + support assessment + quote flags, JSON output | ✅ done |
+| 1 | Grounding / anti-hallucination | ✅ done |
+| 2 | **Eval harness** (`python run_evals.py`): precision, recall, hallucination rate | ⏳ next |
+| 2 | Cross-document consistency | ✅ done |
+| 3 | Confidence scoring, judicial-memo agent (≥4 agents) | ⏳ planned |
+| 3 | Structured UI | ⏳ planned |
+| — | Reflection document | ⏳ with Tier 2 |
 
-Build a multi-agent pipeline that analyzes these documents and produces a structured verification report. Your pipeline should:
+## Design influences
 
-**Core (Tier 1)**
-- Extract all citations from the Motion for Summary Judgment
-- For each citation, assess whether the cited authority actually supports the proposition as stated
-- Flag direct quotes for accuracy
-- Produce structured output (JSON) — not a wall of prose
+Some of the design choices here are grounded in prior production experience;
+others come from recent literature. Attributing them explicitly:
 
-**Expected (Tier 2)**
-- Build an eval harness that measures your pipeline's output quality. It must be runnable via a single command (e.g., `python run_evals.py`). At minimum, measure precision (avoiding false flags), recall (catching known flaws), and hallucination rate (not fabricating findings). You choose the approach — there's no prescribed framework or tooling.
-- Cross-document consistency check: compare facts stated in the MSJ against the police report, medical records, and witness statement
-- Express uncertainty appropriately — "could not verify" rather than fabricating a finding
-- Pass structured data between agents, not raw text blobs
+**From building a production legal-domain LLM/RAG assistant (a court system's
+AI assistant, ~600k users):**
+- *Grounding by literal source citation* — forcing the model to point at exact
+  source text and rejecting anything it can't, rather than trusting free-form
+  output. In that system it was enforced via mandatory source-chunk tags; here
+  it's the verbatim-quote check in `grounding.py`.
+- *Treating document text as data, never instructions* — the `<security>` block
+  and the per-request sentinel fencing in `prompts.py` mirror the prompt-injection
+  defenses used there for untrusted case-file content.
+- *Passing structured data between stages* and *expressing uncertainty instead of
+  fabricating* (`could_not_verify`) — both are operating principles carried over
+  from that project.
 
-**Stretch (Tier 3)**
-- At least 4 well-defined agents with distinct, non-overlapping roles
-- A confidence scoring layer: each flag rated by how certain the pipeline is, with reasoning
-- A judicial memo agent: synthesizes the top findings into a one-paragraph summary written for a judge
-- Agent orchestration that handles failures gracefully
-- A UI that displays the report in a structured, readable way — not just raw JSON
-- A reflection document explaining the tradeoffs you made and what you'd do differently
+**From studying current research / best practices:**
+- *Minimal-span evidence citation* and *groundedness as a first-class metric* —
+  informed by recent grounded-generation work (e.g. Google's FACTS Grounding
+  benchmark, MiniCheck). This shaped the "cite the shortest span containing the
+  fact" instruction and the word-boundary grounding check.
+- *Native structured outputs over a heavyweight agent framework* — a deliberate
+  simplicity choice for a small agent graph, rather than reaching for LangChain.
 
-## Deliverables
+## The assessment
 
-1. A working `POST /analyze` endpoint that returns a structured verification report
-2. Agent code with clear, named agents and explicit prompts
-3. A runnable eval suite with instructions in your README on how to run it
-4. A brief reflection (in the repo or as a separate file) on your design decisions and tradeoffs
-
-## Time
-
-6 hours. This is intentionally scoped beyond what most candidates will finish. Where you invest your time matters more than finishing everything. A well-tested pipeline that catches 3 flaws is stronger than an untested one that attempts 10.
-
-## Evals
-
-We run your eval suite as part of our review. Document how to run it in your README. We care more about thoughtful metric design than perfect scores — an eval that honestly reports 60% recall tells us more than one that reports 100% on cherry-picked cases.
-
-## AI Usage
-
-Use everything. That's the job. We want to see how you use it, not whether you do.
-
-## Evaluation
-
-We are evaluating:
-
-1. How you decompose the problem into agents
-2. How precisely you write prompts
-3. The quality of your eval approach — do you measure what matters?
-4. How far you get through the spec
-5. How honest your reflection is
-
-Not lines of code.
+This project implements the "BS Detector" technical assessment for the
+Sr Fullstack Engineer role at Learned Hand.

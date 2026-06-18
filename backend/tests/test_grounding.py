@@ -170,6 +170,22 @@ def test_typographic_variants_still_ground():
     assert len(result.evidence) == 1
 
 
+def test_superscript_footnote_marker_does_not_fold_into_a_digit():
+    # NFC (not NFKC): a footnote-marked source like "exceeded 90²" must NOT ground a
+    # quote that swaps the superscript marker for a real digit ("exceeded 902").
+    # Under NFKC the ² folds to 2 and this would falsely ground a fabricated number.
+    docs = {"police_report": "Harmon exceeded 90² percent compliance."}
+    fabricated = _finding(
+        VerificationStatus.CONTRADICTED,
+        [("police_report", "exceeded 902 percent")],
+    )
+
+    result = validate_grounding(fabricated, docs)
+
+    assert result.status == VerificationStatus.COULD_NOT_VERIFY
+    assert result.evidence == []
+
+
 def test_could_not_verify_keeps_a_grounded_quote():
     # If the quote does exist, there's no reason to strip it.
     finding = _finding(

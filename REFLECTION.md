@@ -45,7 +45,7 @@ carried over.
 
 An eval is easy to make lie. I tried to defend against the standard ways:
 
-- **Gold set labeled from the source documents** (`eval/gold_set.yaml`), every
+- **Gold set labeled from the source documents** (`backend/eval/gold_set.yaml`), every
   `proof_span` hand-checkable against the corpus. I labeled the flaws from the
   documents rather than from pipeline output (the easiest way for an eval to lie
   is to grade against what the system already catches) — but in fairness this is
@@ -61,10 +61,10 @@ An eval is easy to make lie. I tried to defend against the standard ways:
   scaffolding" observation lands there instead of inflating precision.
 - **A deliberately-planted flaw the pipeline misses** — the brief's "one year and
   362 days" arithmetic slip (it's ~361). There is no arithmetic-checking agent,
-  so recall honestly reports **4/5**, not a staged 4/4. An honest 80% says more
+  so recall honestly reports a sub-100%, not a staged perfect score. An honest miss says more
   than a cherry-picked 100%.
 - **Metric arithmetic is unit-tested independent of any model**
-  (`eval/test_metrics.py`): a perturbation that empties the findings drops recall,
+  (`backend/eval/test_metrics.py`): a perturbation that empties the findings drops recall,
   a flag on a negative raises FP, an ungrounded quote raises hallucination — the
   numbers genuinely move.
 
@@ -73,13 +73,16 @@ An eval is easy to make lie. I tried to defend against the standard ways:
 I'd rather state these than have them found:
 
 - **Small denominators.** The gold set now spans two cases (the provided Rivera
-  matter plus a synthetic contract case authored to test generalization), 8
-  planted flaws total — aggregate recall 7/8. The one honest miss is Rivera's
+  matter plus a synthetic contract case authored to test generalization), 9
+  planted flaws/controls total — aggregate recall **8/9**, precision band
+  **[71%, 83%]** with one false positive. The one honest recall miss is Rivera's
   intra-document arithmetic slip (the "362 days" off-by-one), planted with
   `expected_to_be_missed` because there is no arithmetic-checking agent — so the
-  sub-100% is real, not staged. Two cases prove the *method* carries past one
-  fixture, but they don't make the *rate* statistically settled. The Wilson CIs
-  say so; more cases is the obvious next step, not a claim made.
+  sub-100% is real, not staged. The one false positive is the synthetic
+  deadline-renegotiation over-flag described above — also real, also reported. Two
+  cases prove the *method* carries past one fixture, but they don't make the *rate*
+  statistically settled. The Wilson CIs say so; more cases is the obvious next
+  step, not a claim made.
 - **Post-gate hallucination is ~0 "by construction."** The hallucination check
   reuses the pipeline's own grounding check, so on the shipped report it's
   near-tautological. That's why `--live` runs a **pre-gate vs post-gate
@@ -96,11 +99,38 @@ I'd rather state these than have them found:
   justifies it (e.g. the Privette "never liable" overstatement is internally
   detectable). A bare `contradicted` with no flag fails the axis — that's the
   line between a justified internal finding and an unfounded claim.
+- **The honesty axis tests BOTH failure directions.** Beyond "never fabricate
+  support for a fake case", a second control (`real_authorities_not_overflagged`)
+  checks the opposite error: condemning a *genuine*, accurately-cited authority.
+  The brief cites two real California Supreme Court Privette-doctrine cases
+  (Privette itself and SeaBright v. US Airways) accurately; a precise pipeline must
+  not mark them contradicted. Without this control a pipeline could "pass" honesty
+  by reflexively distrusting everything — including real law. (An earlier draft of
+  the gold set mislabeled SeaBright as fabricated; that was a factual error in the
+  ground truth, since corrected — the gold is only as trustworthy as its labels,
+  so the labels are verified against the documents and against real reporters.)
+- **A planted hard-negative surfaced a real false positive — kept, not hidden.**
+  The synthetic case's `deadline_true` negative (the contract's true Feb 28
+  deadline) is flagged `contradicted` by the pipeline, which mistakes a later
+  "revised schedule" note for a contradiction of what the deadline *was*. The eval
+  reports this as **FP=1** (synthetic precision band drops to [75%, 75%]) rather
+  than burying the spurious flag in the unscored pending bucket. It is exactly the
+  over-flagging error a precision near-miss is meant to catch; reporting it is the
+  point.
+- **Prompt-injection defense is asymmetric — disclosed, not papered over.** The
+  per-document sentinel + system header reduce *forgery* (a document forging a
+  delimiter or issuing commands) and the grounding gate kills *fabricated evidence*.
+  But an injection that *suppresses* a true contradiction — steering an agent to
+  stay silent — produces an empty/short finding list, and every downstream gate
+  only inspects findings that exist. So injection-driven **false negatives** have no
+  structural backstop here; the mitigations are prompt-layer, not a guarantee. A
+  production answer would add a recall floor / canary (a known planted conflict the
+  pipeline must always surface) to detect suppression. Named, not built.
 
 ## What I'd do differently / next
 
 - **An arithmetic/temporal-consistency agent** for the date-math class of defect
-  the current pipeline misses (the planted 4/5 miss).
+  the current pipeline misses (the planted, deliberately-missed arithmetic flaw).
 - **A real existence check for citations** (CourtListener / eyecite) to turn
   "internal plausibility" into a true verified/not-found signal — the genuinely
   correct *production* upgrade, deliberately out of scope here because the

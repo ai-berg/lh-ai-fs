@@ -6,6 +6,15 @@
 # contradiction, and an altered direct quote (a contract clause with its
 # limitation language quietly removed). Labels are verifiable via the verbatim
 # proof_spans against the documents in this directory.
+#
+# PROVENANCE (honest disclosure): the documents AND this gold set are hand-authored.
+# `snapshot.json` is committed as the EXPECTED pipeline output for scoring the method
+# offline — it is NOT certified as a captured live run (gold, docs, and snapshot were
+# added in one commit, unlike Rivera's snapshot-before-gold ordering). So a 3/3 here
+# demonstrates the SCORER matches the intended output, not that the live pipeline
+# independently catches these on a fresh run. Regenerate a real one with
+# `python eval/run_evals.py --live` for an end-to-end signal. The hallucination row
+# is correspondingly labeled "hand-authored fixture, no ablation" in the report.
 
 case: northgate_v_brightway
 documents: [motion_for_summary_judgment, delivery_invoice, supply_agreement_excerpt]
@@ -44,7 +53,11 @@ flaws:
     where: cross_doc
     expected_flag_type: quote_altered
     msj_claim_contains: "without limitation"
-    proof_span: "shall not exceed the total contract price and shall exclude lost profits"
+    # Span chosen to sit on ONE line in supply_agreement_excerpt.txt so it is
+    # greppable verbatim (the full clause "...and shall exclude lost profits" wraps
+    # across a line break; the grounding gate folds whitespace and still matches, but
+    # the gold's "verifiable by grep" promise must hold without that folding).
+    proof_span: "shall not exceed the total contract price and shall exclude"
     proof_doc: supply_agreement_excerpt
     description: >
       The MSJ's quote of Section 7.2 deletes the damages cap, materially altering
@@ -59,3 +72,14 @@ negatives:
     proof_span: "component SKU-440"
     doc: motion_for_summary_judgment
     note: The component SKU is consistent across all documents; must not be flagged.
+  - id: deadline_true   # HARD NEGATIVE — superficially temptable (mirrors Rivera's OSHA one)
+    proof_span: "The agreed delivery deadline was February 28, 2023"
+    doc: motion_for_summary_judgment
+    note: >
+      Tempting to flag as contradicted by the invoice's note of a "revised schedule
+      (correspondence dated February 20, 2023)" — but the ORIGINAL contractual
+      deadline (Feb 28) is a true, undisputed fact; a later partial-shipment
+      arrangement does not contradict what the deadline WAS. A zealous pipeline
+      conflates "the deadline was X" with "the deadline was never renegotiated" and
+      over-flags; a precise one must not. This is the synthetic case's demonstrated
+      (not merely wired) precision near-miss.

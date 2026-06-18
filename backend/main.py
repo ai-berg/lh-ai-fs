@@ -3,12 +3,12 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from repositories.document_repository import load_documents
 from schemas import VerificationReport
-from services.orchestrator import run_pipeline
+from services.orchestrator import EmptyCorpusError, run_pipeline
 
 
 @asynccontextmanager
@@ -40,4 +40,9 @@ app.add_middleware(
 async def analyze() -> VerificationReport:
     """Run the multi-agent verification pipeline over the case documents."""
     docs = load_documents()
-    return await run_pipeline(docs)
+    try:
+        return await run_pipeline(docs)
+    except EmptyCorpusError as exc:
+        # No MSJ to audit is a bad-input condition, not a server fault — return 422
+        # rather than a deceptively empty 200 report.
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -22,8 +22,10 @@ logger = logging.getLogger(__name__)
 # ONLY to log a soft warning on a suspiciously low extraction; it never fails the
 # request, and is the one sample-coupled constant here (overridable via env).
 def _expected_min_citations() -> int:
-    # Parse defensively: a malformed override must not crash module import (this
-    # value only gates a soft warning), so fall back to the default.
+    # Parse defensively: a malformed override must not crash (this value only gates a
+    # soft warning), so fall back to the default. Read at the CALL SITE (not cached
+    # at import) so a runtime/test env override — e.g. monkeypatch.setenv — actually
+    # takes effect; a module-level constant would freeze the import-time value.
     try:
         return int(os.getenv("EXPECTED_MIN_CITATIONS", "11"))
     except ValueError:
@@ -31,7 +33,14 @@ def _expected_min_citations() -> int:
         return 11
 
 
-EXPECTED_MIN_CITATIONS = _expected_min_citations()
+class EmptyCorpusError(ValueError):
+    """No usable MSJ in the corpus — the pipeline has nothing to audit.
+
+    Raised (not silently returning an empty report) so a missing/empty MSJ is
+    distinguishable from a clean audit that genuinely found nothing. The route
+    surfaces it as a 4xx instead of returning a deceptively empty 200.
+    """
+
 
 CitationAgent = Callable[[dict[str, str]], Awaitable[list[Citation]]]
 CrossDocAgent = Callable[[dict[str, str]], Awaitable[list[Finding]]]
@@ -81,15 +90,22 @@ async def run_pipeline(
     cross_doc_agent: CrossDocAgent | None = None,
 ) -> VerificationReport:
     """Run the pipeline and return a grounded VerificationReport."""
+    # Guard the input BEFORE running agents: an empty/whitespace MSJ would make both
+    # agents return [] for benign reasons, producing a report indistinguishable from
+    # a clean audit (degraded_agents would be empty). Fail loudly instead.
+    if not (docs.get(MSJ_DOC) or "").strip():
+        raise EmptyCorpusError(f"no MSJ found under '{MSJ_DOC}' in the provided corpus")
+
     citations, findings, degraded = await run_agents(
         docs, citation_agent=citation_agent, cross_doc_agent=cross_doc_agent
     )
     citations, grounded = apply_grounding(citations, findings, docs)
 
-    if "CitationAuditAgent" not in degraded and len(citations) < EXPECTED_MIN_CITATIONS:
+    expected_min = _expected_min_citations()
+    if "CitationAuditAgent" not in degraded and len(citations) < expected_min:
         logger.warning(
             "citation_count_below_expected",
-            extra={"got": len(citations), "expected_min": EXPECTED_MIN_CITATIONS},
+            extra={"got": len(citations), "expected_min": expected_min},
         )
 
     return VerificationReport(citations=citations, flags=grounded, degraded_agents=degraded)

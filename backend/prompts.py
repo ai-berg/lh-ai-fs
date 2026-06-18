@@ -1,16 +1,25 @@
 """Prompt templates and safe message building for the BS Detector agents.
 
 ``build_messages`` splits instructions (system role) from untrusted documents
-(user role) and fences each document in a per-request random sentinel, so
-instruction-like content inside a document cannot forge the delimiter and hijack
-the prompt.
+(user role) and fences each document in a per-DOCUMENT random sentinel, so
+instruction-like content inside one document cannot forge the delimiter of a
+sibling document and hijack the prompt. (Per-document, not merely per-request: a
+malicious doc never sees a sibling's random marker, so it can't close the sibling's
+fence — the property a single per-request sentinel would not give.)
 
 Design note: the system/user role separation plus the sentinel-fencing defense
 are carried over from prior production experience hardening a legal-domain LLM
 assistant against prompt injection in untrusted case-file text.
 """
 
+import re
 from uuid import uuid4
+
+# Document keys are interpolated raw into <{name}> tags below. That is safe ONLY
+# because the names are operator-controlled filesystem stems, never untrusted input
+# — assert it so the trust boundary is enforced, not just assumed. A key with angle
+# brackets or markup could otherwise break out of the tag structure.
+_DOC_KEY_RE = re.compile(r"^[a-z0-9_]+$")
 
 # Instructions live in the SYSTEM message; untrusted documents go in the USER
 # message (see build_messages). Models privilege system over user, so keeping the
@@ -102,6 +111,12 @@ def build_messages(system_template: str, **documents: str) -> list[dict]:
     """
     fenced = []
     for name, text in documents.items():
+        # The name is operator-controlled (a filesystem stem), but enforce that
+        # invariant rather than trusting it: the name goes into <{name}> tags, so a
+        # name with markup could break the structure. Document text is untrusted but
+        # safe — it lives inside the random fence, never in tag position.
+        if not _DOC_KEY_RE.match(name):
+            raise ValueError(f"invalid document key {name!r}: expected [a-z0-9_]+")
         marker = uuid4().hex  # one marker per document; BEGIN and END must match
         fenced.append(f"<{name}>\n[BEGIN-{marker}]\n{text}\n[END-{marker}]\n</{name}>")
     return [

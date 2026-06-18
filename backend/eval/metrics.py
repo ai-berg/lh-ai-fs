@@ -68,27 +68,30 @@ def _flaw_caught(flaw: dict, report: dict) -> bool:
         #  - Otherwise abstain (could_not_verify), OR carry a flag_type that
         #    justifies an assertive "contradicted". A bare "contradicted" with no
         #    flag is an unfounded ruling, not honesty.
-        # No credit when the citation agent degraded, extracted nothing, or
-        # extracted only a partial subset: an empty all([]) is vacuously True, and
-        # a 1-of-11 subset would let "every extracted citation abstained" pass even
-        # though most fictional authorities were never audited. Require the flaw's
-        # min_citations coverage (the count an honest extraction should reach).
         cites = report["citations"]
-        min_cov = flaw.get("min_citations", 1)
-        if not cites or len(cites) < min_cov or "CitationAuditAgent" in report.get("degraded_agents", []):
+        if not cites or "CitationAuditAgent" in report.get("degraded_agents", []):
             return False
 
-        # Scope the honesty check to the fictional authorities this flaw covers, if
-        # listed — so a legitimately "verified" REAL authority elsewhere in the
-        # stream doesn't wrongly fail the fictional-authority recall point. When no
-        # list is given (this case: every authority is fictional), check all.
+        # Scope the honesty check to the fabricated authorities this flaw names.
         targets = flaw.get("fictional_authorities")
         scoped = (
             [c for c in cites if any(_contains(c.get("authority", ""), a) for a in targets)]
             if targets
             else cites
         )
-        if not scoped:
+
+        # COVERAGE GATE (why this and not a total-count floor): honesty is judged
+        # only over `scoped`, so we must confirm the fabricated authorities were
+        # actually extracted before crediting "they all abstained". A total-count
+        # check (len(cites) >= min_citations) does NOT do this — a run could extract
+        # 11 citations, only 2 of them fabricated (both abstaining) plus 9 real ones
+        # asserted "verified", and still pass. So gate on coverage of the LIST: every
+        # named fabricated authority must appear in the extraction. min_citations is
+        # kept only as a secondary breadth floor.
+        if targets and len(scoped) < len(targets):
+            return False
+        min_cov = flaw.get("min_citations", 1)
+        if len(cites) < min_cov or not scoped:
             return False
 
         def _honest(c: dict) -> bool:
@@ -99,14 +102,41 @@ def _flaw_caught(flaw: dict, report: dict) -> bool:
 
         return all(_honest(c) for c in scoped)
 
+    if flaw.get("expectation") == "no_real_authority_marked_contradicted":
+        # Real-authority control (the OTHER honesty failure mode): a precise pipeline
+        # must not condemn a genuine, accurately cited authority. We credit the flaw
+        # when every named real authority that was extracted is NOT asserted
+        # "contradicted" without an internal basis. could_not_verify is fine (the
+        # tool has no case-law lookup); "verified" is fine (it recognized the case);
+        # only a bare "contradicted" with no justifying flag_type is the error.
+        cites = report["citations"]
+        if "CitationAuditAgent" in report.get("degraded_agents", []):
+            return False
+        targets = flaw.get("real_authorities", [])
+        scoped = [c for c in cites if any(_contains(c.get("authority", ""), a) for a in targets)]
+        if not scoped:
+            return False
+
+        def _not_condemned(c: dict) -> bool:
+            return not (c.get("support_assessment") == "contradicted" and not c.get("flag_type"))
+
+        return all(_not_condemned(c) for c in scoped)
+
     # Citation-support on the CITATION stream: the named authority carries the
-    # expected flag. (Only when the flaw is anchored to a citation, not a finding.)
+    # expected flag AND, when the flaw names a proof_span, the citation's quoted_text
+    # contains it — so an overstatement flag on the WRONG proposition of a
+    # same-named authority (the fixture has two Privette citations) doesn't get
+    # credit for catching the planted absolute quote.
     if flaw.get("expected_flag_type") and flaw.get("where") == "citation":
+        span = flaw.get("proof_span")
         for c in report["citations"]:
-            if _contains(c.get("authority", ""), flaw["authority_contains"]) and (
-                c.get("flag_type") == flaw["expected_flag_type"]
-            ):
-                return True
+            if not _contains(c.get("authority", ""), flaw["authority_contains"]):
+                continue
+            if c.get("flag_type") != flaw["expected_flag_type"]:
+                continue
+            if span and not _contains(c.get("quoted_text", "") or "", span):
+                continue
+            return True
         return False
 
     if axis in ("cross_doc", "intra_doc_arithmetic"):
@@ -154,11 +184,28 @@ def _matches_negative(flag: dict, negatives: list[dict]) -> dict | None:
 
 
 def _matches_any_flaw(flag: dict, flaws: list[dict]) -> bool:
+    """Whether a flag corresponds to a planted cross-doc flaw.
+
+    Strict: requires the claim, the expected flag_type (when named), and the
+    proof_span in the cited evidence — the same bar _flaw_caught uses. A loose
+    claim-substring-only match would wrongly keep a genuinely-unplanted or
+    wrong-flag finding OUT of pending_adjudication, skewing the precision band.
+    """
     for flaw in flaws:
-        if flaw.get("where") == "cross_doc" and _contains(
-            flag.get("msj_claim", ""), flaw.get("msj_claim_contains", "\x00")
+        if flaw.get("where") != "cross_doc":
+            continue
+        if not _contains(flag.get("msj_claim", ""), flaw.get("msj_claim_contains", "\x00")):
+            continue
+        want_flag = flaw.get("expected_flag_type")
+        if want_flag and flag.get("flag_type") != want_flag:
+            continue
+        if not any(
+            e.get("source_doc") == flaw.get("proof_doc")
+            and _contains(e.get("quote", ""), flaw.get("proof_span", "\x00"))
+            for e in flag.get("evidence", [])
         ):
-            return True
+            continue
+        return True
     return False
 
 
@@ -230,7 +277,19 @@ def score(gold: dict, report: dict, docs: dict) -> dict:
             # Plausible but unplanted — neither rewarded nor penalized.
             pending.append(flag.get("msj_claim"))
 
-    true_positives = sum(1 for f in per_flaw if f["caught"] and f["axis"] == "cross_doc")
+    # TP counts caught flaws that live in the FLAG stream — keyed on `where ==
+    # "cross_doc"`, the SAME predicate _matches_any_flaw uses for the pending gate.
+    # (Earlier this keyed on scoring_axis == "cross_doc", which dropped a caught
+    # `where:cross_doc / axis:intra_doc_arithmetic` flag out of both TP and pending —
+    # it counted in recall but vanished from precision. Aligning both predicates on
+    # `where` keeps the flag-stream accounting internally consistent.)
+    # HONEST COUPLING NOTE: TP reuses recall's "caught" flags, so the precision POINT
+    # estimate is partly tautological (a caught planted flaw is, by construction, a
+    # true positive). What precision adds independently is the FP/pending denominator
+    # — flags landing on labeled negatives or on nothing planted. Read the band and
+    # FP count, not the point %; the negatives are what make precision falsifiable.
+    flag_stream_ids = {f["id"] for f in flaws if f.get("where") == "cross_doc"}
+    true_positives = sum(1 for f in per_flaw if f["caught"] and f["id"] in flag_stream_ids)
     denom = true_positives + len(false_positives)
     precision = (true_positives / denom) if denom else None
     # Precision as a range over the pending bucket: if every pending finding were
@@ -244,6 +303,27 @@ def score(gold: dict, report: dict, docs: dict) -> dict:
 
     # ---- grounding consistency: cited quotes absent from their source (post-gate)
     grounding = grounding_consistency_rate(report["flags"], docs)
+
+    # ---- citation-support stream diagnostic ----
+    # WHY a separate diagnostic, not a precision FP: the precision band scopes to the
+    # cross-doc FLAG stream (it has labeled negatives; the citation stream does not).
+    # But the citation stream can still emit a malformed verdict that would otherwise
+    # cost nothing — e.g. an `overstatement` flag with no quoted_text to overstate.
+    # An overstatement is a claim ABOUT a direct quote, so it must carry one; a
+    # citation flagged overstatement with quoted_text empty is an unsupported verdict.
+    # We surface the count (and the flag_type distribution) so the report can't hide
+    # a stream of quote-free overstatements behind an unscored axis.
+    citation_issues = [
+        {"authority": c.get("authority"), "flag_type": c.get("flag_type")}
+        for c in report["citations"]
+        if c.get("flag_type") == "overstatement"
+        and not (c.get("quoted_text") or c.get("is_direct_quote"))
+    ]
+    flag_type_dist: dict[str, int] = {}
+    for c in report["citations"]:
+        ft = c.get("flag_type")
+        if ft:
+            flag_type_dist[ft] = flag_type_dist.get(ft, 0) + 1
 
     return {
         "recall": {
@@ -263,4 +343,8 @@ def score(gold: dict, report: dict, docs: dict) -> dict:
             "ci95": wilson_ci(true_positives, denom) if denom else None,
         },
         "grounding_consistency": grounding,
+        "citation_support": {
+            "flag_type_distribution": flag_type_dist,
+            "malformed_overstatements": citation_issues,
+        },
     }

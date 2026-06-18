@@ -110,28 +110,44 @@ class Citation(_EnumValueModel):
 
     @model_validator(mode="after")
     def _no_verified_without_a_quote(self) -> "Citation":
-        # Mirror of Finding's evidence guard: a "verified" support assessment with
-        # no quoted_text to stand on is an unfounded claim about an authority the
-        # pipeline cannot look up. Fail safe to could_not_verify deterministically,
-        # not just by prompt instruction.
+        # NARROW guard (not the full honesty mechanism — see the honesty axis in the
+        # eval for that): a "verified" support assessment with literally no
+        # quoted_text to stand on is an unfounded claim, so fail safe to
+        # could_not_verify deterministically. NOTE this does NOT catch a fabricated
+        # authority that the model paired with some MSJ-sourced quoted_text — that
+        # case is caught downstream by grounding + the eval's authority-honesty axis,
+        # not here. Assign `.value` (not the enum object): use_enum_values coerces
+        # input at construction but NOT a field reassigned in an after-validator, so
+        # without .value model_dump() would emit the enum on this path and a plain
+        # string everywhere else — a heterogeneous contract that breaks stringifying
+        # consumers only on the downgrade branch.
         if self.support_assessment == VerificationStatus.VERIFIED and not self.quoted_text:
-            self.support_assessment = VerificationStatus.COULD_NOT_VERIFY
+            self.support_assessment = VerificationStatus.COULD_NOT_VERIFY.value
         return self
 
 
 class Finding(_EnumValueModel):
-    """A grounded issue raised by an agent against the MSJ."""
+    """A grounded issue raised by an agent against the MSJ.
 
-    flag_type: FlagType
+    Field ORDER is load-bearing: structured outputs emit keys in declaration order,
+    so every verdict component (status, flag_type) is placed AFTER
+    comparison_reasoning. That way the model commits to the reasoning before naming
+    a category — flag_type is a conclusion ("this conflict is a quote_altered"), not
+    an input, so emitting it first would let the label drive the analysis instead of
+    the other way round. (Mirrors Citation's reasoning-before-verdict ordering.)
+    """
+
     msj_claim: str = Field(..., description="The assertion in the MSJ under scrutiny.")
-    # Before `status` (see Citation.assessment_reasoning): forces the prompt's
-    # numbered comparison method to run before the verdict under structured output.
     comparison_reasoning: str = Field(
         ...,
         description="Brief analysis BEFORE the verdict: the MSJ fact, what the "
         "reference documents say about it, and whether they conflict.",
     )
     status: VerificationStatus
+    flag_type: FlagType = Field(
+        ..., description="Category of the issue — a CONCLUSION drawn after the "
+        "comparison_reasoning, not an input to it.",
+    )
     evidence: list[EvidenceRef] = Field(
         default_factory=list,
         description="Verbatim support; required when status is not could_not_verify.",
@@ -149,8 +165,11 @@ class Finding(_EnumValueModel):
         # inconsistent. Fail safe to could_not_verify rather than asserting
         # something the finding cannot back up (mirrors the grounding layer), and
         # annotate the explanation so the downgrade isn't silently contradictory.
+        # Assign `.value` for the same use_enum_values reason as Citation above:
+        # a field reassigned in an after-validator is not re-coerced, so emitting the
+        # string keeps model_dump()['status'] homogeneous across all findings.
         if self.status != VerificationStatus.COULD_NOT_VERIFY and not self.evidence:
-            self.status = VerificationStatus.COULD_NOT_VERIFY
+            self.status = VerificationStatus.COULD_NOT_VERIFY.value
             self.explanation += " [downgraded: no supporting evidence provided]"
         return self
 

@@ -5,6 +5,15 @@ source document. We normalize whitespace and case so the model may re-wrap text,
 but a quote that is genuinely absent (a fabricated citation) downgrades the
 finding to ``could_not_verify`` and clears its evidence.
 
+Known tolerance (documented, not a bug): whitespace is collapsed before matching,
+so a quote that stitches text across a line/paragraph break in the source still
+grounds (the source's newline becomes a space). This is the deliberate price of
+forgiving the model's re-wrapping; it can let a quote spanning a paragraph boundary
+match even though the two halves were never one printed line. Acceptable here
+because the check is verbatim-attribution (the words DID appear, contiguously after
+whitespace folding); a stricter variant would keep newline sentinels to forbid
+cross-boundary stitching, at the cost of more false negatives on re-wrapped quotes.
+
 Design note: the "model must point at real source text, never invent it" rule is
 carried over from prior production experience on a legal-domain RAG assistant.
 
@@ -43,11 +52,17 @@ _TYPOGRAPHIC = str.maketrans(
 def _normalize(text: str) -> str:
     """Lowercase, fold typographic variants, and collapse whitespace.
 
-    NFKC unifies compatibility forms (ligatures, superscripts) before the manual
-    quote/dash/ellipsis fold; the goal is that benign extraction artifacts don't
-    cause false-negative grounding on otherwise-identical text.
+    NFC (NOT NFKC) on purpose: we want to unify combining/accent forms (so accented
+    text and the curly-quote/dash fold below behave), but NFKC ALSO folds Unicode
+    *compatibility* forms — superscripts and sub/full-width digits collapse to ASCII
+    (²->2, ⁰->0, ０->0). In legal PDFs, footnote markers ARE superscripts, so under
+    NFKC `is_grounded("day 21", "day 2¹")` would return True — grounding a fabricated
+    number against a footnote-marked source. NFC keeps superscripts distinct, so a
+    quote that swaps a footnote marker for a real digit is correctly rejected. The
+    explicit _TYPOGRAPHIC table still handles the benign quote/dash/ellipsis variants
+    we DO want to forgive.
     """
-    text = unicodedata.normalize("NFKC", text).translate(_TYPOGRAPHIC)
+    text = unicodedata.normalize("NFC", text).translate(_TYPOGRAPHIC)
     return re.sub(r"\s+", " ", text).strip().lower()
 
 

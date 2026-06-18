@@ -1,4 +1,4 @@
-"""Eval metrics for the BS Detector: recall, precision, hallucination rate.
+"""Eval metrics for the BS Detector: recall, precision, grounding consistency.
 
 Pure functions over (gold_set, report, docs) so the arithmetic is testable
 without any model call. Matching is deterministic and per-axis; anything the
@@ -7,12 +7,34 @@ pipeline flags that matches neither a planted flaw nor a negative is routed to a
 findings as errors would punish a better pipeline, counting them as hits would
 inflate precision.
 
-Hallucination reuses the pipeline's own grounding check (`_is_grounded`) as an
-independent verifier: any cited quote that does not literally exist in its source
-document is a hallucination, regardless of the pipeline's own status.
+The grounding-consistency check re-applies the pipeline's own `_is_grounded` to
+every cited quote. NOTE: this is NOT an independent hallucination oracle — it's
+the same check the pipeline's grounding gate runs, so on the shipped report it is
+~0 by construction. It is a regression guard (catches a quote that slipped the
+gate) and the basis for the --live pre/post-gate ablation, not a measure of the
+raw model's faithfulness. A true independent check would need a different
+mechanism (entailment/NLI), named as future work in services/grounding.py.
 """
 
+import math
+
 from services.grounding import _is_grounded, _normalize
+
+
+def wilson_ci(successes: int, n: int, z: float = 1.96) -> list[float]:
+    """Wilson 95% confidence interval for a proportion.
+
+    With our tiny denominators (n=2..8) a bare "100%"/"0%" point estimate is
+    misleading — the Wilson interval is the standard small-sample correction and
+    keeps the bounds inside [0, 1]. Returned as [low, high], rounded.
+    """
+    if n == 0:
+        return [0.0, 1.0]
+    p = successes / n
+    denom = 1 + z * z / n
+    center = (p + z * z / (2 * n)) / denom
+    half = (z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))) / denom
+    return [round(max(0.0, center - half), 2), round(min(1.0, center + half), 2)]
 
 
 def _contains(text: str, needle: str) -> bool:
@@ -32,14 +54,19 @@ def _flaw_caught(flaw: dict, report: dict) -> bool:
     axis = flaw["scoring_axis"]
 
     if flaw.get("expectation") == "no_citation_marked_verified":
-        # Honesty axis: a fictional authority must either abstain
-        # (could_not_verify) or, if it asserts verified/contradicted, carry a
-        # flag_type that justifies the assertion. A bare "verified" or
-        # "contradicted" with no flag is an unfounded claim, not honesty.
-        return all(
-            c.get("support_assessment") == "could_not_verify" or c.get("flag_type")
-            for c in report["citations"]
-        )
+        # Honesty axis for fictional authorities, two rules:
+        #  - NEVER "verified" — asserting a fabricated authority is good is the
+        #    cardinal sin, even if some flag_type is also attached.
+        #  - Otherwise abstain (could_not_verify), OR carry a flag_type that
+        #    justifies an assertive "contradicted". A bare "contradicted" with no
+        #    flag is an unfounded ruling, not honesty.
+        def _honest(c: dict) -> bool:
+            sa = c.get("support_assessment")
+            if sa == "verified":
+                return False
+            return sa == "could_not_verify" or bool(c.get("flag_type"))
+
+        return all(_honest(c) for c in report["citations"])
 
     if flaw.get("expected_flag_type"):
         # Citation-support axis: the named authority carries the expected flag.
@@ -83,11 +110,12 @@ def _matches_any_flaw(flag: dict, flaws: list[dict]) -> bool:
     return False
 
 
-def hallucination_rate(flags: list[dict], docs: dict) -> dict:
+def grounding_consistency_rate(flags: list[dict], docs: dict) -> dict:
     """Fraction of cited quotes that don't literally exist in their source.
 
     Works on either pre-gate (raw agent) or post-gate (report) findings, so the
-    harness can quantify what the grounding gate removes.
+    harness can quantify what the grounding gate removes (the --live ablation).
+    Not an independent hallucination measure — see the module docstring.
     """
     ungrounded = [
         {"doc": ev.get("source_doc"), "quote": ev.get("quote")}
@@ -132,18 +160,33 @@ def score(gold: dict, report: dict, docs: dict) -> dict:
     true_positives = sum(1 for f in per_flaw if f["caught"] and f["axis"] == "cross_doc")
     denom = true_positives + len(false_positives)
     precision = (true_positives / denom) if denom else None
+    # Precision as a range over the pending bucket: if every pending finding were
+    # ultimately a false positive, precision would fall to its lower bound — so we
+    # report the band rather than the optimistic point estimate.
+    precision_low = (
+        (true_positives / (denom + len(pending)))
+        if (denom + len(pending))
+        else None
+    )
 
-    # ---- hallucination: cited quotes absent from their source (post-gate) ----
-    halluc = hallucination_rate(report["flags"], docs)
+    # ---- grounding consistency: cited quotes absent from their source (post-gate)
+    grounding = grounding_consistency_rate(report["flags"], docs)
 
     return {
-        "recall": {"caught": caught, "total": len(flaws), "per_flaw": per_flaw},
+        "recall": {
+            "caught": caught,
+            "total": len(flaws),
+            "per_flaw": per_flaw,
+            "ci95": wilson_ci(caught, len(flaws)),
+        },
         "precision": {
             "value": precision,
+            "value_low": precision_low,  # if all pending turn out FP
             "true_positives": true_positives,
             "false_positives": len(false_positives),
             "fp_detail": false_positives,
             "pending_adjudication": pending,
+            "ci95": wilson_ci(true_positives, denom) if denom else None,
         },
-        "hallucination": halluc,
+        "grounding_consistency": grounding,
     }

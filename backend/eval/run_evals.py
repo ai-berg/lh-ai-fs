@@ -22,7 +22,7 @@ HERE = Path(__file__).resolve().parent
 BACKEND = HERE.parent
 sys.path.insert(0, str(BACKEND))
 
-from eval.metrics import hallucination_rate, score  # noqa: E402
+from eval.metrics import grounding_consistency_rate, score  # noqa: E402
 from repositories.document_repository import load_documents  # noqa: E402
 
 GOLD = HERE / "gold_set.yaml"
@@ -47,9 +47,9 @@ def _pre_post_gate(docs: dict) -> dict:
     from services.orchestrator import apply_grounding, run_agents
 
     citations, findings, _ = asyncio.run(run_agents(docs))
-    pre = hallucination_rate([f.model_dump() for f in findings], docs)
+    pre = grounding_consistency_rate([f.model_dump() for f in findings], docs)
     _, grounded = apply_grounding(citations, findings, docs)
-    post = hallucination_rate([f.model_dump() for f in grounded], docs)
+    post = grounding_consistency_rate([f.model_dump() for f in grounded], docs)
     return {"pre": pre, "post": post}
 
 
@@ -67,27 +67,34 @@ def main() -> int:
     report = _load_report(args.live)
     r = score(gold, report, docs)
 
-    rec, prec, hal = r["recall"], r["precision"], r["hallucination"]
+    rec, prec, gc = r["recall"], r["precision"], r["grounding_consistency"]
     source = "live pipeline" if args.live else f"snapshot ({SNAPSHOT.name})"
 
-    print(f"\nBS DETECTOR — EVAL REPORT   case={gold['case']}   source={source}\n")
+    def _ci(ci):
+        return f"95% CI [{_pct(ci[0])}, {_pct(ci[1])}]" if ci else ""
 
-    print(f"RECALL (planted flaws caught)   {rec['caught']}/{rec['total']}")
+    print(f"\nBS DETECTOR — EVAL REPORT   case={gold['case']}   source={source}")
+    print("(small fixture, n=1 case — read the k/n fractions and CIs, not the point %.)\n")
+
+    print(f"RECALL (planted flaws caught)   {rec['caught']}/{rec['total']}   {_ci(rec['ci95'])}")
     for f in rec["per_flaw"]:
         print(f"  [{'x' if f['caught'] else ' '}] {f['id']:24} ({f['axis']})")
 
-    print(f"\nPRECISION (avoiding false flags)   {_pct(prec['value'])}"
-          f"   TP={prec['true_positives']} FP={prec['false_positives']}")
+    # Precision as a band: lower bound assumes every pending finding is an FP.
+    band = f"[{_pct(prec['value_low'])}, {_pct(prec['value'])}]" if prec["value"] is not None else "n/a"
+    print(f"\nPRECISION (avoiding false flags)   {band}"
+          f"   TP={prec['true_positives']} FP={prec['false_positives']}"
+          f" pending={len(prec['pending_adjudication'])}   {_ci(prec['ci95'])}")
     for fp in prec["fp_detail"]:
         print(f"  FALSE POSITIVE on negative '{fp['negative']}': {fp['claim']}")
-    if prec["pending_adjudication"]:
-        print(f"  pending_adjudication (unplanted, not scored): {len(prec['pending_adjudication'])}")
-        for c in prec["pending_adjudication"]:
-            print(f"    - {c}")
+    for c in prec["pending_adjudication"]:
+        print(f"  pending (unplanted, not scored): {c}")
 
-    print(f"\nHALLUCINATION RATE (ungrounded cited quotes)   {_pct(hal['rate'])}"
-          f"   {hal['ungrounded_quotes']}/{hal['total_quotes']} quotes")
-    for u in hal["detail"]:
+    print(f"\nGROUNDING CONSISTENCY (cited quotes absent from source)   {_pct(gc['rate'])}"
+          f"   {gc['ungrounded_quotes']}/{gc['total_quotes']} quotes")
+    print("  (this re-runs the pipeline's OWN grounding check — a regression guard,"
+          " not an independent hallucination oracle; ~0 post-gate by construction.)")
+    for u in gc["detail"]:
         print(f"  UNGROUNDED in {u['doc']}: {u['quote'][:70]}")
 
     if args.live:
@@ -104,9 +111,9 @@ def main() -> int:
         )
     else:
         print(
-            "\nNote: post-gate hallucination is ~0 by construction — the grounding gate"
-            "\nclears ungrounded quotes before they reach the report. Run with --live to"
-            "\nsee the pre-gate vs post-gate ablation that quantifies the gate."
+            "\nNote: grounding consistency is ~0 post-gate by construction. Run with"
+            "\n--live for the pre-gate vs post-gate ablation that shows what the gate"
+            "\nactually removes from the raw model output."
         )
     print()
     return 0

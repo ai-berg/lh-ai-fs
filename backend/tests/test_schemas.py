@@ -42,3 +42,32 @@ def test_contradicted_with_evidence_is_kept():
 def test_could_not_verify_without_evidence_is_fine():
     f = _finding(VerificationStatus.COULD_NOT_VERIFY, [])
     assert f.status == VerificationStatus.COULD_NOT_VERIFY
+
+
+def test_citation_verified_without_quote_is_downgraded():
+    from schemas import Citation
+
+    c = Citation(
+        authority="Whitmore v. Delgado",
+        proposition="A hirer is not liable.",
+        is_direct_quote=False,
+        quoted_text=None,
+        assessment_reasoning="r",
+        support_assessment=VerificationStatus.VERIFIED,
+    )
+    # No quote to stand on -> can't claim verified for an unlookup-able authority.
+    assert c.support_assessment == VerificationStatus.COULD_NOT_VERIFY
+
+
+def test_citation_verified_with_a_quote_is_kept():
+    from schemas import Citation
+
+    c = Citation(
+        authority="Whitmore v. Delgado",
+        proposition="A hirer is not liable.",
+        is_direct_quote=True,
+        quoted_text="a hirer is not liable",
+        assessment_reasoning="r",
+        support_assessment=VerificationStatus.VERIFIED,
+    )
+    assert c.support_assessment == VerificationStatus.VERIFIED

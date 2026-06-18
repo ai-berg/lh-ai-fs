@@ -46,9 +46,13 @@ def test_quote_absent_from_msj_withdraws_confidence_without_inventing_a_flag():
 
 
 def test_citation_without_quote_is_untouched():
-    c = _citation(None)
+    # A citation with no quoted_text has nothing for the quote-grounding pass to
+    # check, so ground_citation_quotes must leave it as-is. (Base support is
+    # could_not_verify here because the schema downgrades a quoteless 'verified'
+    # on its own — that's a separate, tested invariant.)
+    c = _citation(None, support=VerificationStatus.COULD_NOT_VERIFY)
     [result] = ground_citation_quotes([c], MSJ)
-    assert result.support_assessment == VerificationStatus.VERIFIED
+    assert result.support_assessment == VerificationStatus.COULD_NOT_VERIFY
     assert result.flag_type is None
 
 

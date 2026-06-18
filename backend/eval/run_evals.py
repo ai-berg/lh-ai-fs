@@ -141,12 +141,16 @@ def _run_case(case: dict, live: bool) -> dict:
     print(f"PRECISION (avoiding false flags)   {band}"
           f"   TP={prec['true_positives']} FP={prec['false_positives']}"
           f" pending={len(prec['pending_adjudication'])}   {_ci(prec['ci95'])}")
+    print(f"  checked {prec['negatives_checked']} labeled negatives (true MSJ statements"
+          f" that must not be flagged), {prec['false_positives']} incorrectly flagged")
     for fp in prec["fp_detail"]:
         print(f"  FALSE POSITIVE on negative '{fp['negative']}': {fp['claim']}")
     for c in prec["pending_adjudication"]:
         print(f"  pending (unplanted, not scored): {c}")
 
-    print(f"GROUNDING CONSISTENCY   {gc['ungrounded_quotes']}/{gc['total_quotes']} ungrounded quotes,"
+    # Labeled "hallucination" so the spec term is discoverable; it is the
+    # grounding-consistency signal (see header caveat: regression guard, not oracle).
+    print(f"HALLUCINATION / GROUNDING   {gc['ungrounded_quotes']}/{gc['total_quotes']} ungrounded quotes,"
           f" {gc['unsupported_assertions']} unsupported assertion(s)")
     for u in gc["detail"]:
         print(f"  UNGROUNDED in {u['doc']}: {u['quote'][:70]}")

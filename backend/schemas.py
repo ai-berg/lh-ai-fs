@@ -108,6 +108,16 @@ class Citation(_EnumValueModel):
         description="Human-readable explanation of the problem, paired with flag_type.",
     )
 
+    @model_validator(mode="after")
+    def _no_verified_without_a_quote(self) -> "Citation":
+        # Mirror of Finding's evidence guard: a "verified" support assessment with
+        # no quoted_text to stand on is an unfounded claim about an authority the
+        # pipeline cannot look up. Fail safe to could_not_verify deterministically,
+        # not just by prompt instruction.
+        if self.support_assessment == VerificationStatus.VERIFIED and not self.quoted_text:
+            self.support_assessment = VerificationStatus.COULD_NOT_VERIFY
+        return self
+
 
 class Finding(_EnumValueModel):
     """A grounded issue raised by an agent against the MSJ."""

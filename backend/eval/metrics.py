@@ -212,6 +212,7 @@ def score(gold: dict, report: dict, docs: dict) -> dict:
             "false_positives": len(false_positives),
             "fp_detail": false_positives,
             "pending_adjudication": pending,
+            "negatives_checked": len(negatives),
             "ci95": wilson_ci(true_positives, denom) if denom else None,
         },
         "grounding_consistency": grounding,

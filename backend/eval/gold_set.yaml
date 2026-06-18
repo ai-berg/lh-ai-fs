@@ -115,6 +115,16 @@ negatives:
     proof_span: "Rivera filed the instant action on March 10, 2023"
     doc: motion_for_summary_judgment
     note: The filing date is not contradicted by any document; must not be flagged.
+  - id: osha_compliance_true   # HARD NEGATIVE — superficially temptable
+    proof_span: "had passed all OSHA inspections conducted at the site"
+    doc: motion_for_summary_judgment
+    note: >
+      Tempting to flag as contradicted by the witness's raised safety concerns —
+      but formal OSHA inspection compliance and an informal on-site concern are
+      different facts; no document states Harmon failed an OSHA inspection. A
+      zealous pipeline over-flags this; a precise one must not. This is the
+      negative that makes precision DEMONSTRATED (a near-miss the model could trip
+      on), not merely wired.
 
 hard_negatives:
   # Benign typographic variants the grounding layer must forgive (NFKC + fold).

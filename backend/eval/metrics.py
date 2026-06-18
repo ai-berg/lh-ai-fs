@@ -60,10 +60,14 @@ def _flaw_caught(flaw: dict, report: dict) -> bool:
         #  - Otherwise abstain (could_not_verify), OR carry a flag_type that
         #    justifies an assertive "contradicted". A bare "contradicted" with no
         #    flag is an unfounded ruling, not honesty.
-        # No credit when the citation agent degraded or extracted nothing: an
-        # empty all([]) is vacuously True and would inflate recall on exactly the
-        # failure path — there were no authorities to audit honestly.
-        if not report["citations"] or "CitationAuditAgent" in report.get("degraded_agents", []):
+        # No credit when the citation agent degraded, extracted nothing, or
+        # extracted only a partial subset: an empty all([]) is vacuously True, and
+        # a 1-of-11 subset would let "every extracted citation abstained" pass even
+        # though most fictional authorities were never audited. Require the flaw's
+        # min_citations coverage (the count an honest extraction should reach).
+        cites = report["citations"]
+        min_cov = flaw.get("min_citations", 1)
+        if not cites or len(cites) < min_cov or "CitationAuditAgent" in report.get("degraded_agents", []):
             return False
 
         def _honest(c: dict) -> bool:
@@ -74,8 +78,9 @@ def _flaw_caught(flaw: dict, report: dict) -> bool:
 
         return all(_honest(c) for c in report["citations"])
 
-    if flaw.get("expected_flag_type"):
-        # Citation-support axis: the named authority carries the expected flag.
+    # Citation-support on the CITATION stream: the named authority carries the
+    # expected flag. (Only when the flaw is anchored to a citation, not a finding.)
+    if flaw.get("expected_flag_type") and flaw.get("where") == "citation":
         for c in report["citations"]:
             if _contains(c.get("authority", ""), flaw["authority_contains"]) and (
                 c.get("flag_type") == flaw["expected_flag_type"]
@@ -83,19 +88,29 @@ def _flaw_caught(flaw: dict, report: dict) -> bool:
                 return True
         return False
 
-    if axis == "cross_doc":
+    if axis in ("cross_doc", "intra_doc_arithmetic"):
         # A flag that ASSERTS the contradiction (status==contradicted), references
-        # the MSJ assertion, and cites the expected source document. Requiring the
-        # contradicted status means an abstention or wrong-side verdict on the
-        # right sentence does not earn catch credit (which would inflate recall).
+        # the MSJ assertion, cites the expected source document AND whose evidence
+        # actually contains the gold proof_span (not just any sentence from the
+        # right doc). If the flaw names an expected_flag_type, require it too — this
+        # is how a flag-stream quote_altered finding is scored. Requiring all of
+        # these stops a grounded-but-irrelevant quote, an abstention, or a
+        # wrong-flag finding from inflating recall. intra_doc_arithmetic shares
+        # this path so a future arithmetic checker that emits such a flag is
+        # credited instead of permanently counted as missed.
+        want_flag = flaw.get("expected_flag_type")
         for f in report["flags"]:
             if f.get("status") != "contradicted":
                 continue
+            if want_flag and f.get("flag_type") != want_flag:
+                continue
             claim_hit = _contains(f.get("msj_claim", ""), flaw["msj_claim_contains"])
-            doc_hit = any(
-                e.get("source_doc") == flaw["proof_doc"] for e in f.get("evidence", [])
+            span_hit = any(
+                e.get("source_doc") == flaw["proof_doc"]
+                and _contains(e.get("quote", ""), flaw["proof_span"])
+                for e in f.get("evidence", [])
             )
-            if claim_hit and doc_hit:
+            if claim_hit and span_hit:
                 return True
         return False
 
@@ -103,8 +118,14 @@ def _flaw_caught(flaw: dict, report: dict) -> bool:
 
 
 def _matches_negative(flag: dict, negatives: list[dict]) -> dict | None:
-    """A flag is a false positive if it targets a known-true negative span."""
-    text = _flag_text(flag)
+    """A flag is a false positive if the CLAIM it challenges is a known-true negative.
+
+    Matches against msj_claim + explanation only — NOT the cited evidence. A valid
+    contradiction can legitimately cite a reference sentence that happens to also
+    contain a negative's span (e.g. a fuller witness line); matching on evidence
+    would wrongly score that true positive as a false positive too.
+    """
+    text = " ".join([flag.get("msj_claim", ""), flag.get("explanation", "")])
     for neg in negatives:
         if _contains(text, neg["proof_span"]):
             return neg
@@ -176,6 +197,11 @@ def score(gold: dict, report: dict, docs: dict) -> dict:
     # flag stream keeps the denominator meaningful rather than padding it.
     false_positives, pending = [], []
     for flag in report["flags"]:
+        # Only an ASSERTIVE flag can be a false positive. A finding the grounding
+        # gate downgraded to could_not_verify makes no false claim, so it must not
+        # be counted against precision even if it mentions a negative's span.
+        if flag.get("status") != "contradicted":
+            continue
         neg = _matches_negative(flag, negatives)
         if neg:
             false_positives.append({"negative": neg["id"], "claim": flag.get("msj_claim")})

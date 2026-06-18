@@ -64,11 +64,12 @@ I'd rather state these than have them found:
 
 - **Small denominators.** The gold set now spans two cases (the provided Rivera
   matter plus a synthetic contract case authored to test generalization), 8
-  planted flaws total — aggregate recall 6/8. Two cases prove the *method*
-  carries past one fixture (and the synthetic case honestly surfaces a real miss:
-  the pipeline catches the quantity/date contradictions but not the altered
-  contract-clause quote), but they don't make the *rate* statistically settled.
-  The Wilson CIs say so; more cases is the obvious next step, not a claim made.
+  planted flaws total — aggregate recall 7/8. The one honest miss is Rivera's
+  intra-document arithmetic slip (the "362 days" off-by-one), planted with
+  `expected_to_be_missed` because there is no arithmetic-checking agent — so the
+  sub-100% is real, not staged. Two cases prove the *method* carries past one
+  fixture, but they don't make the *rate* statistically settled. The Wilson CIs
+  say so; more cases is the obvious next step, not a claim made.
 - **Post-gate hallucination is ~0 "by construction."** The hallucination check
   reuses the pipeline's own grounding check, so on the shipped report it's
   near-tautological. That's why `--live` runs a **pre-gate vs post-gate

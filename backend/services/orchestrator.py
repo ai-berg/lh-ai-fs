@@ -21,7 +21,17 @@ logger = logging.getLogger(__name__)
 # Fixture-specific heuristic: the sample Rivera MSJ cites 11 authorities. Used
 # ONLY to log a soft warning on a suspiciously low extraction; it never fails the
 # request, and is the one sample-coupled constant here (overridable via env).
-EXPECTED_MIN_CITATIONS = int(os.getenv("EXPECTED_MIN_CITATIONS", "11"))
+def _expected_min_citations() -> int:
+    # Parse defensively: a malformed override must not crash module import (this
+    # value only gates a soft warning), so fall back to the default.
+    try:
+        return int(os.getenv("EXPECTED_MIN_CITATIONS", "11"))
+    except ValueError:
+        logger.warning("invalid EXPECTED_MIN_CITATIONS override; using default 11")
+        return 11
+
+
+EXPECTED_MIN_CITATIONS = _expected_min_citations()
 
 CitationAgent = Callable[[dict[str, str]], Awaitable[list[Citation]]]
 CrossDocAgent = Callable[[dict[str, str]], Awaitable[list[Finding]]]

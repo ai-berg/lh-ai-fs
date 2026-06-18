@@ -113,7 +113,7 @@ generalizes past one fixture — and reports per-case **and aggregate**, honestl
 - **Recall** — planted flaws caught, per flaw. The gold set includes a flaw the
   pipeline is *expected to miss* (an intra-document arithmetic slip with no
   checking agent), so the Rivera case reports an honest **4/5** and the
-  cross-case **aggregate is 6/8** — never a staged 100%.
+  cross-case **aggregate is 7/8** — never a staged 100%.
 - **Precision** — false flags landing on labeled *negatives* (true MSJ statements
   that must not be flagged); without negatives precision is meaningless, so the
   Rivera gold set ships four (including a hard negative the model is tempted to

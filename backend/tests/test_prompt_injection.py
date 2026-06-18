@@ -28,13 +28,22 @@ def test_document_is_wrapped_in_a_sentinel_fence():
     messages = build_messages(CITATION_AUDIT_SYSTEM, msj="content")
     roles = _by_role(messages)
 
-    # The user content is fenced and the system message names that exact fence as
-    # the trust boundary — so forged XML tags inside a document can't impersonate
-    # instructions without guessing the per-request sentinel.
+    # Each document is fenced with a random marker, and the system header states
+    # the trust-boundary rule GENERICALLY ([BEGIN-<random>]/[END-<random>]) so it
+    # covers every document, not just the first.
     assert "[BEGIN-" in roles["user"] and "[END-" in roles["user"]
-    sentinel = roles["user"].split("[BEGIN-", 1)[1].split("]", 1)[0]
-    assert len(sentinel) == 32  # uuid4().hex
-    assert sentinel in roles["system"]
+    marker = roles["user"].split("[BEGIN-", 1)[1].split("]", 1)[0]
+    assert len(marker) == 32  # uuid4().hex
+    assert "[BEGIN-<random>]" in roles["system"]  # the generic rule, not a specific id
+
+
+def test_each_document_gets_its_own_marker():
+    # Per-document markers: a malicious doc can't forge a sibling's fence because
+    # it never sees the sibling's random marker.
+    messages = build_messages(CITATION_AUDIT_SYSTEM, doc_a="aaa", doc_b="bbb")
+    user = next(m["content"] for m in messages if m["role"] == "user")
+    markers = [seg.split("]", 1)[0] for seg in user.split("[BEGIN-")[1:]]
+    assert len(markers) == 2 and markers[0] != markers[1]
 
 
 def test_a_forged_fence_in_the_document_cannot_match_the_real_sentinel():

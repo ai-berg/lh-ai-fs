@@ -34,13 +34,15 @@ flaws:
       The MSJ dates delivery March 15, 2023; the invoice says March 8, 2023.
 
   - id: altered_clause_quote
-    scoring_axis: support
+    scoring_axis: cross_doc      # surfaces as a cross-doc Finding (quote_altered)
     severity: high
     objective: true
-    where: citation
-    # The MSJ quotes Section 7.2 ending "...without limitation", but the actual
-    # clause limits damages ("shall not exceed the total contract price and shall
-    # exclude lost profits"). A direct quote with its limiting language removed.
+    # The pipeline surfaces this as a cross-doc Finding with flag_type
+    # quote_altered (the MSJ quotes Section 7.2 ending "...without limitation",
+    # but the actual clause caps damages), not as a citation — so it is scored on
+    # the flag stream with the expected flag_type, not the citation stream.
+    where: cross_doc
+    expected_flag_type: quote_altered
     msj_claim_contains: "without limitation"
     proof_span: "shall not exceed the total contract price and shall exclude lost profits"
     proof_doc: supply_agreement_excerpt

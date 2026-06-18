@@ -65,11 +65,13 @@ def _load_run(case: dict, live: bool, docs: dict):
     invocation (and the agents aren't called twice).
     """
     if not live:
-        from schemas import Finding
-
         report = json.loads(Path(case["snapshot"]).read_text())
+        # Raw pre-gate flags as DICTS (not Finding objects): constructing Finding
+        # would run the schema validator, which downgrades an assertive-but-
+        # evidence-free finding to could_not_verify — blinding the ablation to
+        # exactly the fabrication it's meant to measure. Keep the model's raw status.
         if case.get("pregate"):
-            raw = [Finding(**f) for f in json.loads(Path(case["pregate"]).read_text())["flags"]]
+            raw = json.loads(Path(case["pregate"]).read_text())["flags"]
         else:
             raw = None  # no committed pre-gate fixture for this case
         return report, raw
@@ -83,23 +85,23 @@ def _load_run(case: dict, live: bool, docs: dict):
         "flags": [f.model_dump() for f in grounded],
         "degraded_agents": degraded,
     }
-    return report, findings
+    # Raw findings as dicts, bypassing the schema validator (see above).
+    return report, [f.model_dump() for f in findings]
 
 
-def _pre_post_gate(docs: dict, raw_findings) -> dict:
-    """Ablation: apply the grounding gate to the SAME raw findings and diff.
+def _pre_post_gate(docs: dict, raw_flag_dicts) -> dict:
+    """Ablation: measure the RAW pre-gate dicts, then pass them through the gate.
 
-    Both sides come from one set of raw (pre-gate) findings: the post-gate side is
-    that exact input passed through ``apply_grounding`` — never an unrelated
-    snapshot — so the delta honestly reflects what the gate did to this run.
-    Default uses the committed pre-gate fixture (no API); --live passes fresh
-    findings already captured by the scored run (so the agents aren't re-run).
+    Pre-gate is measured on the raw dicts directly (so an assertive evidence-free
+    fabrication is visible — the schema validator would otherwise have cleared it).
+    Post-gate reconstructs Finding objects and runs apply_grounding, so the delta
+    honestly reflects what the gate removes from this exact run.
     """
+    from schemas import Finding
     from services.orchestrator import apply_grounding
 
-    pre = list(raw_findings)
-    _, post = apply_grounding([], pre, docs)
-    pre_flags = [f.model_dump() for f in pre]
+    pre_flags = list(raw_flag_dicts)
+    _, post = apply_grounding([], [Finding(**f) for f in pre_flags], docs)
     post_flags = [f.model_dump() for f in post]
 
     # A finding whose status survives as assertive (not could_not_verify) is one
@@ -167,7 +169,8 @@ def _run_case(case: dict, live: bool) -> dict:
         )
 
     return {"caught": rec["caught"], "total": rec["total"],
-            "tp": prec["true_positives"], "fp": prec["false_positives"]}
+            "tp": prec["true_positives"], "fp": prec["false_positives"],
+            "pending": len(prec["pending_adjudication"])}
 
 
 def main() -> int:
@@ -186,13 +189,19 @@ def main() -> int:
     total = sum(t["total"] for t in tallies)
     tp = sum(t["tp"] for t in tallies)
     fp = sum(t["fp"] for t in tallies)
+    pending = sum(t["pending"] for t in tallies)
     from eval.metrics import wilson_ci
 
     print(f"\n══ AGGREGATE over {len(CASES)} cases ══")
     print(f"RECALL    {caught}/{total}   95% CI [{_pct(wilson_ci(caught, total)[0])},"
           f" {_pct(wilson_ci(caught, total)[1])}]")
-    prec = tp / (tp + fp) if (tp + fp) else None
-    print(f"PRECISION {_pct(prec)}   TP={tp} FP={fp}")
+    # Same precision band as the per-case rows: the low bound treats every pending
+    # finding as a false positive, so the aggregate can't print an optimistic 100%
+    # while pending findings are outstanding.
+    prec_high = tp / (tp + fp) if (tp + fp) else None
+    prec_low = tp / (tp + fp + pending) if (tp + fp + pending) else None
+    band = f"[{_pct(prec_low)}, {_pct(prec_high)}]" if prec_high is not None else "n/a"
+    print(f"PRECISION {band}   TP={tp} FP={fp} pending={pending}")
     print("(still small-N — two cases prove the method generalizes past one fixture,"
           " not that the rates are statistically settled.)\n")
     return 0

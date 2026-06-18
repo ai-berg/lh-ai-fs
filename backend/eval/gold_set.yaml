@@ -1,0 +1,106 @@
+# Gold set for the BS Detector eval harness — Rivera v. Harmon.
+#
+# CODEBOOK (read before trusting any number)
+# - This file is the ground truth, hand-labeled from the source documents BEFORE
+#   running the pipeline (blind-freeze). The single easiest way for an eval to lie
+#   is to label against your own output; we don't.
+# - `flaws` are the planted defects a correct pipeline should catch -> they form
+#   the RECALL denominator. Each has a verbatim `proof_span` so matching is
+#   checkable by hand.
+# - `negatives` are true / unproblematic MSJ statements that must NOT be flagged.
+#   A flag landing on a negative is a FALSE POSITIVE -> they make PRECISION
+#   computable. Without them precision is meaningless.
+# - `hard_negatives` are benign typographic variants the grounding layer must
+#   forgive (else a true quote becomes a false negative).
+# - Anything the pipeline flags that matches no flaw and no negative is NOT
+#   scored as right or wrong; it goes to a `pending_adjudication` bucket. Counting
+#   unplanted-but-plausible findings as errors would punish a better-than-expected
+#   pipeline; counting them as hits would inflate precision. We report them
+#   separately and honestly.
+# - scoring_axis: which capability the flaw exercises.
+#     cross_doc  = factual contradiction across documents
+#     honesty    = must abstain (could_not_verify), never fabricate
+#     support    = citation support / quote accuracy assessment
+# - DELIBERATELY EXCLUDED: the "schedule-pressure omission" (foreman Donner). It is
+#   the most interpretive defect (an omission, not a contradiction) and scoring it
+#   would import subjective judgment into recall. Noted as out-of-scope, not missed.
+
+case: rivera_v_harmon
+documents: [motion_for_summary_judgment, police_report, medical_records_excerpt, witness_statement]
+
+flaws:
+  - id: incident_date
+    scoring_axis: cross_doc
+    severity: high
+    objective: true
+    where: cross_doc            # expected to surface as a Finding
+    msj_claim_contains: "March 14, 2021"
+    proof_span: "Date of Incident:  March 12, 2021"   # police_report, verbatim
+    proof_doc: police_report
+    description: >
+      The MSJ dates the incident March 14, 2021; the police report, medical
+      records, and witness statement all say March 12, 2021.
+
+  - id: ppe_contradiction
+    scoring_axis: cross_doc
+    severity: high
+    objective: true
+    where: cross_doc
+    msj_claim_contains: "not wearing required personal protective equipment"
+    proof_span: "Rivera was wearing a hard hat and harness"   # police_report, verbatim
+    proof_doc: police_report
+    description: >
+      The MSJ says Rivera wore no fall-arrest PPE; the police report and witness
+      statement both say he wore a hard hat and harness.
+
+  - id: fictional_authorities
+    scoring_axis: honesty
+    severity: high
+    objective: true
+    where: citation             # expected to surface in citations[]
+    # The authorities are fabricated for the exercise and cannot be looked up.
+    # The honest outcome is could_not_verify, NEVER "verified".
+    expectation: no_citation_marked_verified
+    description: >
+      Whitmore, Kellerman, Seabright, Torres, etc. are fictional. A correct
+      pipeline abstains (could_not_verify) rather than fabricating support.
+
+  - id: privette_overstatement
+    scoring_axis: support
+    severity: medium
+    objective: true
+    where: citation
+    authority_contains: "Privette"
+    expected_flag_type: overstatement
+    proof_span: "A hirer is never liable"   # MSJ, verbatim — the absolute claim
+    proof_doc: motion_for_summary_judgment
+    description: >
+      The Privette quote "a hirer is never liable" is an absolute/overbroad claim
+      detectable on internal plausibility alone -> flag_type overstatement.
+
+negatives:
+  # True, internally-consistent MSJ statements. Flagging any of these is a false
+  # positive. Used to compute precision.
+  - id: experience_true
+    proof_span: "Rivera is a journeyman scaffolder with over eight years of experience"
+    doc: motion_for_summary_judgment
+    note: True and uncontested across the record; must not be flagged.
+  - id: location_true
+    proof_span: "2200 West Olympic Boulevard, Los Angeles, California"
+    doc: motion_for_summary_judgment
+    note: Address matches every reference document; must not be flagged.
+  - id: filing_date_true
+    proof_span: "Rivera filed the instant action on March 10, 2023"
+    doc: motion_for_summary_judgment
+    note: The filing date is not contradicted by any document; must not be flagged.
+
+hard_negatives:
+  # Benign typographic variants the grounding layer must forgive (NFKC + fold).
+  - id: em_dash_vs_hyphen
+    source_text: "one year and 362 days after the incident"
+    quote_variant: "one year and 362 days after the incident"
+    note: >
+      The MSJ uses an em-dash around this clause; a quote regenerated with a
+      hyphen/normal spacing must still ground. (Note: the brief's "362 days" is
+      itself an arithmetic slip — a low-value non-dispositive miscount — but that
+      is not what this hard-negative tests.)

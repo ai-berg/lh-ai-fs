@@ -93,17 +93,44 @@ authorities never fabricated as "verified", every contradiction flag grounded,
 the PPE contradiction caught). Regenerate it with
 `docker compose exec backend python scripts/capture_snapshot.py`.
 
+## Evals
+
+```bash
+docker compose exec backend python eval/run_evals.py          # score the committed snapshot (reproducible, no API)
+docker compose exec backend python eval/run_evals.py --live   # run the real pipeline, then score (spends API)
+```
+
+The harness scores the pipeline against a hand-frozen gold set
+(`eval/gold_set.yaml`, labeled from the source documents *before* running the
+pipeline) and reports, honestly:
+
+- **Recall** — planted flaws caught, per flaw (incident-date contradiction, PPE
+  contradiction, abstention on fictional authorities, the Privette overstatement).
+- **Precision** — false flags landing on labeled *negatives* (true MSJ statements
+  that must not be flagged); without negatives precision is meaningless, so the
+  gold set ships three. Plausible-but-unplanted findings go to a
+  `pending_adjudication` bucket — scored neither right nor wrong, so the number
+  isn't gamed in either direction.
+- **Hallucination rate** — cited quotes that don't literally exist in their source
+  (reusing the pipeline's own grounding check as an independent verifier). This is
+  ~0 post-gate by construction; the report says so, and `--live` lets you compare
+  against a raw pre-gate capture to quantify the gate's contribution.
+
+The metric arithmetic has its own unit tests (`eval/test_metrics.py`) on synthetic
+true-positive / false-positive / miss / hallucination cases, so the scoring logic
+is proven independent of any model output.
+
 ## Roadmap
 
 | Tier | Item | Status |
 |------|------|--------|
 | 1 | Citation extraction + support assessment + quote flags, JSON output | ✅ done |
 | 1 | Grounding / anti-hallucination | ✅ done |
-| 2 | **Eval harness** (`python run_evals.py`): precision, recall, hallucination rate | ⏳ next |
 | 2 | Cross-document consistency | ✅ done |
+| 2 | **Eval harness** (`python eval/run_evals.py`): precision, recall, hallucination | ✅ done |
 | 3 | Confidence scoring, judicial-memo agent (≥4 agents) | ⏳ planned |
 | 3 | Structured UI | ⏳ planned |
-| — | Reflection document | ⏳ with Tier 2 |
+| — | Reflection document | ⏳ planned |
 
 ## Design influences
 

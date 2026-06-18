@@ -1,9 +1,10 @@
 """Grounding for citation direct quotes — written before implementation (TDD).
 
-A citation's quoted_text claims to be lifted from the MSJ. If that text is not
-literally present in the MSJ, the quote may be altered; we flag it rather than
-silently trusting it. This extends the anti-hallucination guarantee to the
-Tier 1 citation path (cross-doc findings were already grounded).
+A citation's quoted_text claims to be lifted from the MSJ. The grounding layer
+is verify-only: if that text is not literally present in the MSJ, it withdraws
+confidence (support -> could_not_verify) and annotates the issue, but it does NOT
+invent a flag_type — categorizing the problem (e.g. quote_altered) is the agent's
+judgment, not the verifier's.
 """
 
 from schemas import Citation, FlagType, VerificationStatus
@@ -15,39 +16,47 @@ MSJ = (
 )
 
 
-def _citation(quoted_text):
+def _citation(quoted_text, support=VerificationStatus.VERIFIED):
     return Citation(
         authority="Privette v. Superior Court",
         proposition="A hirer is never liable.",
         is_direct_quote=quoted_text is not None,
         quoted_text=quoted_text,
         assessment_reasoning="r",
-        support_assessment=VerificationStatus.COULD_NOT_VERIFY,
+        support_assessment=support,
     )
 
 
 def test_quote_present_in_msj_is_left_alone():
     c = _citation("a hirer is generally not liable")
     [result] = ground_citation_quotes([c], MSJ)
+    assert result.support_assessment == VerificationStatus.VERIFIED  # unchanged
     assert result.flag_type is None
 
 
-def test_quote_absent_from_msj_is_flagged_as_altered():
+def test_quote_absent_from_msj_withdraws_confidence_without_inventing_a_flag():
     c = _citation("a hirer is ALWAYS fully liable for everything")
     [result] = ground_citation_quotes([c], MSJ)
-    assert result.flag_type == FlagType.QUOTE_ALTERED
+
+    # Verify-only: support is downgraded and the reason is annotated...
+    assert result.support_assessment == VerificationStatus.COULD_NOT_VERIFY
     assert "msj" in (result.issue or "").lower()
+    # ...but the verifier does not create a quote_altered finding itself.
+    assert result.flag_type is None
 
 
 def test_citation_without_quote_is_untouched():
     c = _citation(None)
     [result] = ground_citation_quotes([c], MSJ)
+    assert result.support_assessment == VerificationStatus.VERIFIED
     assert result.flag_type is None
 
 
-def test_existing_flag_type_is_not_overwritten():
+def test_agents_own_flag_is_preserved():
+    # If the agent already judged the quote altered, the verifier keeps that
+    # finding; it only withdraws the support verdict it can't confirm.
     c = _citation("a hirer is ALWAYS fully liable")
-    c.flag_type = FlagType.OVERSTATEMENT
+    c.flag_type = FlagType.QUOTE_ALTERED
     [result] = ground_citation_quotes([c], MSJ)
-    # Don't clobber a more specific flag the agent already set.
-    assert result.flag_type == FlagType.OVERSTATEMENT
+    assert result.flag_type == FlagType.QUOTE_ALTERED
+    assert result.support_assessment == VerificationStatus.COULD_NOT_VERIFY

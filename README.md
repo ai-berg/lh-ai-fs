@@ -80,10 +80,18 @@ Run inside the container (the project is Docker-first):
 docker compose run --rm backend python -m pytest -q
 ```
 
-Tests cover the deterministic core — the grounding layer (verbatim/normalized
-evidence checks) and orchestration resilience (graceful agent degradation) — so
-the safety-critical logic is verified without spending tokens. Agent behavior is
-validated end-to-end against the real case file.
+Most tests are deterministic and LLM-free: the grounding layer
+(verbatim/normalized evidence checks), orchestration resilience (graceful agent
+degradation), the schema invariants, and the prompt-injection fencing — the
+safety-critical logic, verified without spending tokens (agents are tested with a
+monkeypatched LLM).
+
+End-to-end behavior is pinned by a **committed snapshot** of a real GPT-5.5 run
+on the case file (`tests/fixtures/analyze_snapshot.json`); `test_snapshot.py`
+asserts its load-bearing properties (all 11 authorities extracted, fictional
+authorities never fabricated as "verified", every contradiction flag grounded,
+the PPE contradiction caught). Regenerate it with
+`docker compose exec backend python scripts/capture_snapshot.py`.
 
 ## Roadmap
 

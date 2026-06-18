@@ -20,7 +20,7 @@ no-fabrication budget) for this exercise.
 import re
 import unicodedata
 
-from schemas import Citation, FlagType, Finding, VerificationStatus
+from schemas import Citation, Finding, VerificationStatus
 
 _GROUNDING_FAILED_NOTE = " [grounding check failed: quote not found in source]"
 _QUOTE_NOT_IN_MSJ_NOTE = "Quoted text was not found verbatim in the MSJ; the quote may be altered."
@@ -95,26 +95,28 @@ def validate_grounding(finding: Finding, docs: dict[str, str]) -> Finding:
 
 
 def ground_citation_quotes(citations: list[Citation], msj: str) -> list[Citation]:
-    """Return citations with altered-quote flags, without mutating the inputs.
+    """Verify each citation's direct quote against the MSJ, without mutating inputs.
 
-    A citation's ``quoted_text`` purports to be lifted from the brief. If that
-    text cannot be found verbatim in the MSJ, the quote may be altered, so we
-    set ``flag_type=quote_altered`` (unless the agent already assigned a more
-    specific flag) instead of trusting it. This extends the verbatim-grounding
-    guarantee to the Tier 1 citation path. Pure: returns new/unchanged models.
+    Verify-only: a ``quoted_text`` that cannot be found verbatim in the MSJ has
+    its ``support_assessment`` withdrawn to ``could_not_verify`` and the reason
+    annotated in ``issue``. The verifier does NOT invent a ``flag_type`` — naming
+    the defect (e.g. quote_altered) is the citation agent's judgment, so we keep
+    the agent's own flag and never create one here. Pure: returns new/unchanged
+    models.
     """
     result = []
     for citation in citations:
-        flag_quote = (
-            citation.quoted_text
-            and citation.flag_type is None
-            and not _is_grounded(citation.quoted_text, msj)
+        unverifiable_quote = citation.quoted_text and not _is_grounded(
+            citation.quoted_text, msj
         )
-        if flag_quote:
+        if unverifiable_quote:
             issue = (citation.issue + " " if citation.issue else "") + _QUOTE_NOT_IN_MSJ_NOTE
             result.append(
                 citation.model_copy(
-                    update={"flag_type": FlagType.QUOTE_ALTERED, "issue": issue}
+                    update={
+                        "support_assessment": VerificationStatus.COULD_NOT_VERIFY,
+                        "issue": issue,
+                    }
                 )
             )
         else:

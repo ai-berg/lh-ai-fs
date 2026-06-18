@@ -104,9 +104,10 @@ docker compose exec backend python eval/run_evals.py --live   # run the real pip
 pip install -r backend/requirements.txt && python run_evals.py
 ```
 
-The harness scores the pipeline against a hand-frozen gold set
-(`eval/gold_set.yaml`, labeled from the source documents *before* running the
-pipeline) and reports, honestly:
+The harness scores the pipeline against hand-labeled gold sets across **two
+cases** — the provided Rivera matter (`eval/gold_set.yaml`) and a synthetic
+contract case (`eval/cases/synthetic_contract/`) authored to show the method
+generalizes past one fixture — and reports per-case **and aggregate**, honestly:
 
 - **Recall** — planted flaws caught, per flaw. The gold set includes a flaw the
   pipeline is *expected to miss* (an intra-document arithmetic slip with no

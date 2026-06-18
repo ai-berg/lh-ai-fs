@@ -1,0 +1,59 @@
+# Gold set for the synthetic contract case (Northgate v. Brightway).
+#
+# SYNTHETIC: hand-authored to test that the eval method generalizes beyond the
+# single provided case (Rivera). The flaws are of DIFFERENT kinds than Rivera's,
+# to exercise the pipeline on new patterns: a quantity contradiction, a date
+# contradiction, and an altered direct quote (a contract clause with its
+# limitation language quietly removed). Labels are verifiable via the verbatim
+# proof_spans against the documents in this directory.
+
+case: northgate_v_brightway
+documents: [motion_for_summary_judgment, delivery_invoice, supply_agreement_excerpt]
+
+flaws:
+  - id: quantity_contradiction
+    scoring_axis: cross_doc
+    severity: high
+    objective: true
+    where: cross_doc
+    msj_claim_contains: "6,000 units"
+    proof_span: "Quantity Delivered: 8,000 units"   # delivery_invoice, verbatim
+    proof_doc: delivery_invoice
+    description: >
+      The MSJ states 6,000 units were delivered; the delivery invoice says 8,000.
+
+  - id: delivery_date_contradiction
+    scoring_axis: cross_doc
+    severity: medium
+    objective: true
+    where: cross_doc
+    msj_claim_contains: "March 15, 2023"
+    proof_span: "Date of Delivery: March 8, 2023"   # delivery_invoice, verbatim
+    proof_doc: delivery_invoice
+    description: >
+      The MSJ dates delivery March 15, 2023; the invoice says March 8, 2023.
+
+  - id: altered_clause_quote
+    scoring_axis: support
+    severity: high
+    objective: true
+    where: citation
+    # The MSJ quotes Section 7.2 ending "...without limitation", but the actual
+    # clause limits damages ("shall not exceed the total contract price and shall
+    # exclude lost profits"). A direct quote with its limiting language removed.
+    msj_claim_contains: "without limitation"
+    proof_span: "shall not exceed the total contract price and shall exclude lost profits"
+    proof_doc: supply_agreement_excerpt
+    description: >
+      The MSJ's quote of Section 7.2 deletes the damages cap, materially altering
+      the clause's meaning — a quote-accuracy flaw.
+
+negatives:
+  - id: execution_date_true
+    proof_span: "executed a Supply Agreement"
+    doc: motion_for_summary_judgment
+    note: The January 5, 2023 execution date matches the contract; must not be flagged.
+  - id: sku_true
+    proof_span: "component SKU-440"
+    doc: motion_for_summary_judgment
+    note: The component SKU is consistent across all documents; must not be flagged.

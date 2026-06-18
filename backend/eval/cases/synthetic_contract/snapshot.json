@@ -1,0 +1,71 @@
+{
+  "citations": [],
+  "flags": [
+    {
+      "flag_type": "cross_doc_inconsistency",
+      "msj_claim": "Brightway delivered only 6,000 units.",
+      "comparison_reasoning": "The MSJ asserts that Brightway delivered only 6,000 units. The delivery invoice states a different delivered quantity for the same SKU-440 shipment: 8,000 units. These objective quantities conflict.",
+      "status": "contradicted",
+      "evidence": [
+        {
+          "source_doc": "delivery_invoice",
+          "quote": "Quantity Delivered: 8,000 units",
+          "locator": null
+        }
+      ],
+      "explanation": "The invoice contradicts the MSJ’s asserted delivered quantity of 6,000 units.",
+      "raised_by": "CrossDocConsistencyAgent"
+    },
+    {
+      "flag_type": "cross_doc_inconsistency",
+      "msj_claim": "Brightway delivered the units on March 15, 2023.",
+      "comparison_reasoning": "The MSJ asserts that Brightway delivered the units on March 15, 2023. The delivery invoice states the date of delivery was March 8, 2023. These objective delivery dates conflict.",
+      "status": "contradicted",
+      "evidence": [
+        {
+          "source_doc": "delivery_invoice",
+          "quote": "Date of Delivery: March 8, 2023",
+          "locator": null
+        }
+      ],
+      "explanation": "The invoice contradicts the MSJ’s asserted delivery date of March 15, 2023.",
+      "raised_by": "CrossDocConsistencyAgent"
+    },
+    {
+      "flag_type": "quote_altered",
+      "msj_claim": "Section 7.2 states that the buyer may recover all consequential damages without limitation.",
+      "comparison_reasoning": "The MSJ quotes Section 7.2 as allowing recovery of “all consequential damages without limitation.” The Supply Agreement excerpt instead limits consequential damages by the total contract price and excludes lost profits. The quoted remedial language in the MSJ is materially different from the source text.",
+      "status": "contradicted",
+      "evidence": [
+        {
+          "source_doc": "supply_agreement_excerpt",
+          "quote": "provided that such damages shall not exceed the total contract price and shall exclude\nlost profits.",
+          "locator": "Section 7.2"
+        }
+      ],
+      "explanation": "The MSJ’s quotation alters the damages limitation language in Section 7.2 by asserting no limitation, while the agreement excerpt contains an express cap and exclusion.",
+      "raised_by": "CrossDocConsistencyAgent"
+    },
+    {
+      "flag_type": "factual_contradiction",
+      "msj_claim": "The agreed delivery deadline was February 28, 2023, and Brightway delivered after the contractual deadline.",
+      "comparison_reasoning": "The MSJ asserts the February 28, 2023 delivery deadline as controlling and characterizes the delivery as after the contractual deadline. The delivery invoice states that the remaining units were backordered under the buyer’s written agreement to a revised schedule, and the Supply Agreement states that a written amendment supersedes the original deadline. This conflicts with the MSJ’s presentation of the original deadline as undisputed and controlling.",
+      "status": "contradicted",
+      "evidence": [
+        {
+          "source_doc": "delivery_invoice",
+          "quote": "Remaining 2,000 units backordered per buyer's written\nagreement to a revised schedule",
+          "locator": null
+        },
+        {
+          "source_doc": "supply_agreement_excerpt",
+          "quote": "Any such amendment supersedes the original deadline.",
+          "locator": "Section 9.1"
+        }
+      ],
+      "explanation": "The reference documents indicate a written revised schedule that would supersede the original deadline, contradicting the MSJ’s assertion that the original February 28 deadline controlled without dispute.",
+      "raised_by": "CrossDocConsistencyAgent"
+    }
+  ],
+  "degraded_agents": []
+}

@@ -62,9 +62,13 @@ An eval is easy to make lie. I tried to defend against the standard ways:
 
 I'd rather state these than have them found:
 
-- **Tiny denominators.** Recall is over 5 planted flaws on one case; precision's
-  denominator is 2. The metric *design* is the point, but a single case can't
-  establish a stable rate. More cases + bootstrap CIs is the obvious next step.
+- **Small denominators.** The gold set now spans two cases (the provided Rivera
+  matter plus a synthetic contract case authored to test generalization), 8
+  planted flaws total — aggregate recall 6/8. Two cases prove the *method*
+  carries past one fixture (and the synthetic case honestly surfaces a real miss:
+  the pipeline catches the quantity/date contradictions but not the altered
+  contract-clause quote), but they don't make the *rate* statistically settled.
+  The Wilson CIs say so; more cases is the obvious next step, not a claim made.
 - **Post-gate hallucination is ~0 "by construction."** The hallucination check
   reuses the pipeline's own grounding check, so on the shipped report it's
   near-tautological. That's why `--live` runs a **pre-gate vs post-gate

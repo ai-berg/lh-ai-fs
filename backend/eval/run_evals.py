@@ -28,21 +28,50 @@ from repositories.document_repository import load_documents  # noqa: E402
 GOLD = HERE / "gold_set.yaml"
 SNAPSHOT = BACKEND / "tests" / "fixtures" / "analyze_snapshot.json"
 PREGATE = BACKEND / "tests" / "fixtures" / "pregate_snapshot.json"
+CASES_DIR = HERE / "cases"
+
+# Case registry. Each case = its documents + gold set + a committed snapshot, so
+# the default run scores every case offline. The provided Rivera case uses the
+# repo's documents/ dir and the existing fixtures; synthetic cases live self-
+# contained under eval/cases/ and exist to show the method generalizes past n=1.
+CASES = [
+    {
+        "name": "rivera_v_harmon (provided)",
+        "docs": load_documents,                       # backend/documents/
+        "gold": GOLD,
+        "snapshot": SNAPSHOT,
+        "pregate": PREGATE,                           # has the ablation fixtures
+    },
+    {
+        "name": "northgate_v_brightway (synthetic)",
+        "docs": lambda: _load_dir(CASES_DIR / "synthetic_contract"),
+        "gold": CASES_DIR / "synthetic_contract" / "gold.yaml",
+        "snapshot": CASES_DIR / "synthetic_contract" / "snapshot.json",
+        "pregate": None,
+    },
+]
 
 
-def _load_run(live: bool, docs: dict):
-    """Return (report_dict, raw_findings) for one run.
+def _load_dir(path: Path) -> dict:
+    return {p.stem: p.read_text(encoding="utf-8") for p in sorted(path.glob("*.txt"))}
 
-    Default: the committed post-gate snapshot + the committed pre-gate findings —
-    no API. Live: run the agents ONCE and derive both the grounded report and the
-    raw findings from that single run, so scoring and the ablation describe the
-    same pipeline invocation (and the agents aren't called twice).
+
+def _load_run(case: dict, live: bool, docs: dict):
+    """Return (report_dict, raw_findings) for one case's run.
+
+    Default: the case's committed snapshot (+ pre-gate fixture if present) — no
+    API. Live: run the agents ONCE and derive both the grounded report and the raw
+    findings from that single run, so scoring and the ablation describe the same
+    invocation (and the agents aren't called twice).
     """
     if not live:
         from schemas import Finding
 
-        report = json.loads(SNAPSHOT.read_text())
-        raw = [Finding(**f) for f in json.loads(PREGATE.read_text())["flags"]]
+        report = json.loads(Path(case["snapshot"]).read_text())
+        if case.get("pregate"):
+            raw = [Finding(**f) for f in json.loads(Path(case["pregate"]).read_text())["flags"]]
+        else:
+            raw = None  # no committed pre-gate fixture for this case
         return report, raw
 
     from services.orchestrator import apply_grounding, run_agents
@@ -91,32 +120,25 @@ def _pct(x) -> str:
     return "n/a" if x is None else f"{x * 100:.0f}%"
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Score the BS Detector against the gold set.")
-    parser.add_argument("--live", action="store_true", help="run the real pipeline instead of the snapshot")
-    args = parser.parse_args()
+def _ci(ci):
+    return f"95% CI [{_pct(ci[0])}, {_pct(ci[1])}]" if ci else ""
 
-    gold = yaml.safe_load(GOLD.read_text())
-    docs = load_documents()
-    report, raw_findings = _load_run(args.live, docs)
+
+def _run_case(case: dict, live: bool) -> dict:
+    """Score one case, print its report, and return its recall/precision tallies."""
+    gold = yaml.safe_load(Path(case["gold"]).read_text())
+    docs = case["docs"]()
+    report, raw_findings = _load_run(case, live, docs)
     r = score(gold, report, docs)
-
     rec, prec, gc = r["recall"], r["precision"], r["grounding_consistency"]
-    source = "live pipeline" if args.live else f"snapshot ({SNAPSHOT.name})"
 
-    def _ci(ci):
-        return f"95% CI [{_pct(ci[0])}, {_pct(ci[1])}]" if ci else ""
-
-    print(f"\nBS DETECTOR — EVAL REPORT   case={gold['case']}   source={source}")
-    print("(small fixture, n=1 case — read the k/n fractions and CIs, not the point %.)\n")
-
+    print(f"\n── CASE: {case['name']}   ({'live' if live else 'snapshot'}) ──")
     print(f"RECALL (planted flaws caught)   {rec['caught']}/{rec['total']}   {_ci(rec['ci95'])}")
     for f in rec["per_flaw"]:
-        print(f"  [{'x' if f['caught'] else ' '}] {f['id']:24} ({f['axis']})")
+        print(f"  [{'x' if f['caught'] else ' '}] {f['id']:26} ({f['axis']})")
 
-    # Precision as a band: lower bound assumes every pending finding is an FP.
     band = f"[{_pct(prec['value_low'])}, {_pct(prec['value'])}]" if prec["value"] is not None else "n/a"
-    print(f"\nPRECISION (avoiding false flags)   {band}"
+    print(f"PRECISION (avoiding false flags)   {band}"
           f"   TP={prec['true_positives']} FP={prec['false_positives']}"
           f" pending={len(prec['pending_adjudication'])}   {_ci(prec['ci95'])}")
     for fp in prec["fp_detail"]:
@@ -124,32 +146,51 @@ def main() -> int:
     for c in prec["pending_adjudication"]:
         print(f"  pending (unplanted, not scored): {c}")
 
-    print(f"\nGROUNDING CONSISTENCY (cited quotes absent from source)   {_pct(gc['rate'])}"
-          f"   {gc['ungrounded_quotes']}/{gc['total_quotes']} quotes")
-    print(f"  unsupported assertions (assertive finding, no evidence)   {gc['unsupported_assertions']}")
-    print("  (re-runs the pipeline's OWN grounding check — a regression guard, not an"
-          " independent hallucination oracle; ~0 post-gate by construction.)")
+    print(f"GROUNDING CONSISTENCY   {gc['ungrounded_quotes']}/{gc['total_quotes']} ungrounded quotes,"
+          f" {gc['unsupported_assertions']} unsupported assertion(s)")
     for u in gc["detail"]:
         print(f"  UNGROUNDED in {u['doc']}: {u['quote'][:70]}")
-    for c in gc["unsupported_detail"]:
-        print(f"  UNSUPPORTED ASSERTION: {c}")
 
-    # Ablation always runs, applying the gate to the SAME raw findings used above
-    # (committed pre-gate fixture by default; the live run's raw findings under --live).
-    ab = _pre_post_gate(docs, raw_findings)
-    src = "live" if args.live else "committed pre-gate fixture -> grounding gate"
-    quotes_removed = ab["pre"]["ungrounded_quotes"] - ab["post"]["ungrounded_quotes"]
-    flags_dropped = ab["pre_assertive"] - ab["post_assertive"]
-    print(
-        f"\nGROUNDING-GATE ABLATION ({src})"
-        f"\n  pre-gate  (raw model):  {ab['pre']['ungrounded_quotes']} ungrounded quote(s),"
-        f" {ab['pre_assertive']} assertive finding(s)"
-        f"\n  post-gate (shipped):    {ab['post']['ungrounded_quotes']} ungrounded quote(s),"
-        f" {ab['post_assertive']} assertive finding(s)"
-        f"\n  -> the gate cleared {quotes_removed} ungrounded quote(s) and downgraded"
-        f" {flags_dropped} fabricated finding(s) to could_not_verify."
-    )
-    print()
+    # Ablation only where a pre-gate fixture (or a live run) provides raw findings.
+    if raw_findings is not None:
+        ab = _pre_post_gate(docs, raw_findings)
+        print(
+            f"GROUNDING-GATE ABLATION:"
+            f" pre-gate {ab['pre']['ungrounded_quotes']} ungrounded / {ab['pre_assertive']} assertive"
+            f" -> post-gate {ab['post']['ungrounded_quotes']} / {ab['post_assertive']}"
+            f"  (gate cleared {ab['pre']['ungrounded_quotes'] - ab['post']['ungrounded_quotes']} quote(s),"
+            f" downgraded {ab['pre_assertive'] - ab['post_assertive']} finding(s))"
+        )
+
+    return {"caught": rec["caught"], "total": rec["total"],
+            "tp": prec["true_positives"], "fp": prec["false_positives"]}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Score the BS Detector against the gold set(s).")
+    parser.add_argument("--live", action="store_true", help="run the real pipeline instead of the snapshots")
+    args = parser.parse_args()
+
+    print("\nBS DETECTOR — EVAL REPORT")
+    print("(small gold sets — read the k/n fractions and CIs, not the point %. The"
+          " grounding-consistency rate re-runs the pipeline's own check: a regression"
+          " guard, not an independent hallucination oracle.)")
+
+    tallies = [_run_case(c, args.live) for c in CASES]
+
+    caught = sum(t["caught"] for t in tallies)
+    total = sum(t["total"] for t in tallies)
+    tp = sum(t["tp"] for t in tallies)
+    fp = sum(t["fp"] for t in tallies)
+    from eval.metrics import wilson_ci
+
+    print(f"\n══ AGGREGATE over {len(CASES)} cases ══")
+    print(f"RECALL    {caught}/{total}   95% CI [{_pct(wilson_ci(caught, total)[0])},"
+          f" {_pct(wilson_ci(caught, total)[1])}]")
+    prec = tp / (tp + fp) if (tp + fp) else None
+    print(f"PRECISION {_pct(prec)}   TP={tp} FP={fp}")
+    print("(still small-N — two cases prove the method generalizes past one fixture,"
+          " not that the rates are statistically settled.)\n")
     return 0
 
 

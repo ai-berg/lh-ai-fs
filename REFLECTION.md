@@ -35,8 +35,13 @@ runs before the verdict rather than rationalizing it after.
 
 An eval is easy to make lie. I tried to defend against the standard ways:
 
-- **Blind-frozen gold set** (`eval/gold_set.yaml`), labeled from the source
-  documents *before* running the pipeline, every `proof_span` hand-checkable.
+- **Gold set labeled from the source documents** (`eval/gold_set.yaml`), every
+  `proof_span` hand-checkable against the corpus. I labeled the flaws from the
+  documents rather than from pipeline output (the easiest way for an eval to lie
+  is to grade against what the system already catches) — but in fairness this is
+  an *attestation*, not a git-provable blind freeze: the gold-set file was
+  committed after the first snapshot, so trust the verbatim `proof_span`s, not my
+  word on ordering.
 - **Labeled negatives** (true MSJ statements that must not be flagged) so
   precision is computable at all — without them a "100% precision" headline is
   meaningless.

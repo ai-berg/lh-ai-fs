@@ -90,20 +90,22 @@ critical error.
 def build_messages(system_template: str, **documents: str) -> list[dict]:
     """Build a [system, user] message pair with injection-resistant fencing.
 
-    Instructions (``system_template``) go in the system role; the untrusted
-    ``documents`` go in the user role, each fenced with a random per-call
-    sentinel. The same sentinel is interpolated into the system template (as
-    ``{sentinel}``) so the instructions can name the fence — not the spoofable
-    XML tags — as the trust boundary. A document cannot guess the per-call
-    sentinel, so it cannot forge a fence the model would treat as instructions.
+    Instructions (``system_template``) go in the system role; each untrusted
+    document goes in the user role fenced with its OWN per-document random
+    sentinel. Per-document (not per-call) sentinels matter when several untrusted
+    docs share one message: a malicious doc can't forge a *sibling* doc's fence,
+    because it never sees the sibling's sentinel. The system template names the
+    fence — not the spoofable ``<name>`` tags — as the trust boundary via
+    ``{sentinel}`` (the first document's marker; all follow the same shape).
     """
-    sentinel = uuid4().hex
-    system = system_template.format(sentinel=sentinel)
-    user = "\n\n".join(
-        f"<{name}>\n[BEGIN-{sentinel}]\n{text}\n[END-{sentinel}]\n</{name}>"
-        for name, text in documents.items()
-    )
+    fenced, first_sentinel = [], None
+    for name, text in documents.items():
+        sentinel = uuid4().hex
+        first_sentinel = first_sentinel or sentinel
+        fenced.append(f"<{name}>\n[BEGIN-{sentinel}]\n{text}\n[END-{sentinel}]\n</{name}>")
+
+    system = system_template.format(sentinel=first_sentinel or uuid4().hex)
     return [
         {"role": "system", "content": system},
-        {"role": "user", "content": user},
+        {"role": "user", "content": "\n\n".join(fenced)},
     ]

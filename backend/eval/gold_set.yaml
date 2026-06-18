@@ -1,9 +1,13 @@
 # Gold set for the BS Detector eval harness — Rivera v. Harmon.
 #
 # CODEBOOK (read before trusting any number)
-# - This file is the ground truth, hand-labeled from the source documents BEFORE
-#   running the pipeline (blind-freeze). The single easiest way for an eval to lie
-#   is to label against your own output; we don't.
+# - This file is the ground truth, hand-labeled from the source documents (the
+#   single easiest way for an eval to lie is to label against your own output;
+#   these flaws were read off the documents, not the pipeline). Honesty note: this
+#   is an attestation, not a git-provable blind freeze — the file was committed
+#   after the first snapshot. Verify the labels via the verbatim `proof_span`s
+#   below, which you can grep against backend/documents/, rather than trusting the
+#   ordering.
 # - `flaws` are the planted defects a correct pipeline should catch -> they form
 #   the RECALL denominator. Each has a verbatim `proof_span` so matching is
 #   checkable by hand.

@@ -126,9 +126,11 @@ pipeline) and reports, honestly:
   construction (the report says so), and `--live` runs the pre-gate vs post-gate
   ablation that shows what the gate actually removes from the raw model output.
 
-The metric arithmetic has its own unit tests (`eval/test_metrics.py`) on synthetic
-true-positive / false-positive / miss / hallucination cases, so the scoring logic
-is proven independent of any model output.
+The metric arithmetic has its own 14 unit tests (`eval/test_metrics.py`) on
+synthetic true-positive / false-positive / miss / hallucination cases, so the
+scoring logic is proven independent of any model output. (These prove the
+*method* is correct, not that the pipeline catches flaws at scale — that rests on
+the planted flaws across the gold set's cases, not on the test count.)
 
 ## Roadmap
 

@@ -8,18 +8,20 @@ default.
 
 import asyncio
 import logging
+import os
 from typing import Awaitable, Callable
 
+from repositories.document_repository import MSJ_DOC
 from schemas import Citation, Finding, VerificationReport
 from services.agents.base import run_agent
 from services.grounding import ground_citation_quotes, validate_grounding
 
 logger = logging.getLogger(__name__)
 
-MSJ_DOC = "motion_for_summary_judgment"
-# Known authority count in the sample MSJ; a soft floor used only to warn on a
-# suspiciously low extraction, never to fail the request.
-EXPECTED_MIN_CITATIONS = 11
+# Fixture-specific heuristic: the sample Rivera MSJ cites 11 authorities. Used
+# ONLY to log a soft warning on a suspiciously low extraction; it never fails the
+# request, and is the one sample-coupled constant here (overridable via env).
+EXPECTED_MIN_CITATIONS = int(os.getenv("EXPECTED_MIN_CITATIONS", "11"))
 
 CitationAgent = Callable[[dict[str, str]], Awaitable[list[Citation]]]
 CrossDocAgent = Callable[[dict[str, str]], Awaitable[list[Finding]]]

@@ -10,11 +10,11 @@ import logging
 
 from llm import call_llm_structured
 from prompts import CROSS_DOC_SYSTEM, build_messages
+from repositories.document_repository import MSJ_DOC
 from schemas import CrossDocOutput, Finding
 
 logger = logging.getLogger(__name__)
 
-MSJ_DOC = "motion_for_summary_judgment"
 AGENT_NAME = "CrossDocConsistencyAgent"
 
 
@@ -26,10 +26,9 @@ async def check_cross_doc_consistency(docs: dict[str, str]) -> list[Finding]:
         logger.warning("cross_doc_missing_inputs")
         return []
 
-    reference_blob = "\n\n".join(
-        f"=== {name} ===\n{text}" for name, text in references.items()
-    )
-    messages = build_messages(CROSS_DOC_SYSTEM, msj=msj, reference_docs=reference_blob)
+    # Pass each reference document as its own fenced unit (own sentinel), so a
+    # malicious reference can't forge a sibling document's boundary.
+    messages = build_messages(CROSS_DOC_SYSTEM, msj=msj, **references)
     result = await call_llm_structured(messages=messages, schema=CrossDocOutput)
 
     # Stamp provenance ourselves rather than trusting the model to fill it.

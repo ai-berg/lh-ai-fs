@@ -15,7 +15,33 @@ load_dotenv()
 # structured outputs + the factual task for stability.
 STRUCTURED_MODEL = os.getenv("STRUCTURED_MODEL", "gpt-5.5")
 
+# Cap the structured output so a long brief can't silently truncate the citation
+# list. Sized for the worst-case extraction (every authority + every cross-doc
+# finding with reasoning) well above the observed run, and configurable so an
+# operator can raise it for a larger corpus without a code change. Without a cap, a
+# truncated parse raises LengthFinishReasonError and the WHOLE agent degrades to []
+# — better to fail loudly with a typed error the orchestrator can record.
+def _max_completion_tokens() -> int:
+    # Parse defensively: this is an optional tuning knob, so an empty/non-numeric
+    # override must not crash module import (which would kill the app before the
+    # agent-level degraded fallback could ever run). Fall back to the default.
+    try:
+        return int(os.getenv("STRUCTURED_MAX_TOKENS", "8000"))
+    except ValueError:
+        return 8000
+
+
+MAX_COMPLETION_TOKENS = _max_completion_tokens()
+
 T = TypeVar("T", bound=BaseModel)
+
+
+class LLMOutputError(RuntimeError):
+    """The model returned no usable structured output (refusal or truncation).
+
+    Raised so the orchestrator's per-agent resilience records a DEGRADED agent
+    instead of an AttributeError on a None `.parsed` masquerading as a clean run.
+    """
 
 
 @lru_cache(maxsize=1)
@@ -40,10 +66,31 @@ async def call_llm_structured(
     matches the schema — no brittle JSON parsing. We don't pin ``temperature``
     because reasoning models reject non-default values; the schema constraint and
     the factual task keep outputs stable.
+
+    Raises ``LLMOutputError`` on a refusal or a length-truncated reply, so the
+    caller degrades the agent explicitly rather than dereferencing a ``None``
+    ``.parsed`` (which the ``-> T`` annotation would otherwise quietly violate).
     """
     response = await _async_client().beta.chat.completions.parse(
         model=model,
         messages=messages,
         response_format=schema,
+        max_completion_tokens=MAX_COMPLETION_TOKENS,
     )
-    return response.choices[0].message.parsed
+    choice = response.choices[0]
+    message = choice.message
+
+    # A model refusal comes back as a populated `.refusal` with `.parsed` None —
+    # surface it as a typed error, don't treat it as an empty result.
+    if getattr(message, "refusal", None):
+        raise LLMOutputError(f"model refused to answer: {message.refusal}")
+    # finish_reason == "length" means the structured output was truncated mid-object;
+    # `.parsed` is None and any downstream `.citations`/`.findings` access would crash.
+    if choice.finish_reason == "length":
+        raise LLMOutputError(
+            "structured output truncated (finish_reason=length); raise "
+            "STRUCTURED_MAX_TOKENS for this corpus"
+        )
+    if message.parsed is None:
+        raise LLMOutputError("no parsed structured output returned")
+    return message.parsed

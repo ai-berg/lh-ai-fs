@@ -1,0 +1,85 @@
+# Gold set for the synthetic contract case (Northgate v. Brightway).
+#
+# SYNTHETIC: hand-authored to test that the eval method generalizes beyond the
+# single provided case (Rivera). The flaws are of DIFFERENT kinds than Rivera's,
+# to exercise the pipeline on new patterns: a quantity contradiction, a date
+# contradiction, and an altered direct quote (a contract clause with its
+# limitation language quietly removed). Labels are verifiable via the verbatim
+# proof_spans against the documents in this directory.
+#
+# PROVENANCE (honest disclosure): the documents AND this gold set are hand-authored.
+# `snapshot.json` is committed as the EXPECTED pipeline output for scoring the method
+# offline — it is NOT certified as a captured live run (gold, docs, and snapshot were
+# added in one commit, unlike Rivera's snapshot-before-gold ordering). So a 3/3 here
+# demonstrates the SCORER matches the intended output, not that the live pipeline
+# independently catches these on a fresh run. Regenerate a real one with
+# `python eval/run_evals.py --live` for an end-to-end signal. The hallucination row
+# is correspondingly labeled "hand-authored fixture, no ablation" in the report.
+
+case: northgate_v_brightway
+documents: [motion_for_summary_judgment, delivery_invoice, supply_agreement_excerpt]
+
+flaws:
+  - id: quantity_contradiction
+    scoring_axis: cross_doc
+    severity: high
+    objective: true
+    where: cross_doc
+    msj_claim_contains: "6,000 units"
+    proof_span: "Quantity Delivered: 8,000 units"   # delivery_invoice, verbatim
+    proof_doc: delivery_invoice
+    description: >
+      The MSJ states 6,000 units were delivered; the delivery invoice says 8,000.
+
+  - id: delivery_date_contradiction
+    scoring_axis: cross_doc
+    severity: medium
+    objective: true
+    where: cross_doc
+    msj_claim_contains: "March 15, 2023"
+    proof_span: "Date of Delivery: March 8, 2023"   # delivery_invoice, verbatim
+    proof_doc: delivery_invoice
+    description: >
+      The MSJ dates delivery March 15, 2023; the invoice says March 8, 2023.
+
+  - id: altered_clause_quote
+    scoring_axis: cross_doc      # surfaces as a cross-doc Finding (quote_altered)
+    severity: high
+    objective: true
+    # The pipeline surfaces this as a cross-doc Finding with flag_type
+    # quote_altered (the MSJ quotes Section 7.2 ending "...without limitation",
+    # but the actual clause caps damages), not as a citation — so it is scored on
+    # the flag stream with the expected flag_type, not the citation stream.
+    where: cross_doc
+    expected_flag_type: quote_altered
+    msj_claim_contains: "without limitation"
+    # Span chosen to sit on ONE line in supply_agreement_excerpt.txt so it is
+    # greppable verbatim (the full clause "...and shall exclude lost profits" wraps
+    # across a line break; the grounding gate folds whitespace and still matches, but
+    # the gold's "verifiable by grep" promise must hold without that folding).
+    proof_span: "shall not exceed the total contract price and shall exclude"
+    proof_doc: supply_agreement_excerpt
+    description: >
+      The MSJ's quote of Section 7.2 deletes the damages cap, materially altering
+      the clause's meaning — a quote-accuracy flaw.
+
+negatives:
+  - id: execution_date_true
+    proof_span: "executed a Supply Agreement"
+    doc: motion_for_summary_judgment
+    note: The January 5, 2023 execution date matches the contract; must not be flagged.
+  - id: sku_true
+    proof_span: "component SKU-440"
+    doc: motion_for_summary_judgment
+    note: The component SKU is consistent across all documents; must not be flagged.
+  - id: deadline_true   # HARD NEGATIVE — superficially temptable (mirrors Rivera's OSHA one)
+    proof_span: "The agreed delivery deadline was February 28, 2023"
+    doc: motion_for_summary_judgment
+    note: >
+      Tempting to flag as contradicted by the invoice's note of a "revised schedule
+      (correspondence dated February 20, 2023)" — but the ORIGINAL contractual
+      deadline (Feb 28) is a true, undisputed fact; a later partial-shipment
+      arrangement does not contradict what the deadline WAS. A zealous pipeline
+      conflates "the deadline was X" with "the deadline was never renegotiated" and
+      over-flags; a precise one must not. This is the synthetic case's demonstrated
+      (not merely wired) precision near-miss.

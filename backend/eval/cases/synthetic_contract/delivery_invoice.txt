@@ -1,0 +1,17 @@
+BRIGHTWAY MANUFACTURING, LLC
+DELIVERY INVOICE
+
+Invoice No.: BW-2023-0417
+Purchase Order: NG-SKU440
+Ship-to: Northgate Logistics, Inc.
+
+Date of Delivery: March 8, 2023
+
+Item: Component SKU-440
+Quantity Delivered: 8,000 units
+Quantity Ordered: 10,000 units
+
+Note: Partial shipment. Remaining 2,000 units backordered per buyer's written
+agreement to a revised schedule (see correspondence dated February 20, 2023).
+
+Received and signed by: Northgate receiving dock, March 8, 2023.

@@ -123,3 +123,27 @@ async def test_all_agents_failing_still_returns_valid_report():
     assert report.citations == []
     assert report.flags == []
     assert len(report.degraded_agents) == 2
+
+
+@pytest.mark.asyncio
+async def test_empty_msj_raises_rather_than_returning_empty_report():
+    # An empty/whitespace MSJ must NOT look like a clean audit that found nothing —
+    # it's a bad-input condition the route turns into a 422.
+    from services.orchestrator import EmptyCorpusError
+
+    with pytest.raises(EmptyCorpusError):
+        await run_pipeline(
+            {"motion_for_summary_judgment": "   ", "police_report": "x"},
+            citation_agent=_citation_agent_ok,
+            cross_doc_agent=_cross_doc_agent_ok,
+        )
+
+
+def test_expected_min_citations_reads_env_at_call_site(monkeypatch):
+    # The override must take effect at runtime, not be frozen at import.
+    from services.orchestrator import _expected_min_citations
+
+    monkeypatch.setenv("EXPECTED_MIN_CITATIONS", "3")
+    assert _expected_min_citations() == 3
+    monkeypatch.setenv("EXPECTED_MIN_CITATIONS", "not_a_number")
+    assert _expected_min_citations() == 11  # falls back, doesn't crash

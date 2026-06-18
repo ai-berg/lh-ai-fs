@@ -28,13 +28,22 @@ def test_document_is_wrapped_in_a_sentinel_fence():
     messages = build_messages(CITATION_AUDIT_SYSTEM, msj="content")
     roles = _by_role(messages)
 
-    # The user content is fenced and the system message names that exact fence as
-    # the trust boundary — so forged XML tags inside a document can't impersonate
-    # instructions without guessing the per-request sentinel.
+    # Each document is fenced with a random marker, and the system header states
+    # the trust-boundary rule GENERICALLY ([BEGIN-<random>]/[END-<random>]) so it
+    # covers every document, not just the first.
     assert "[BEGIN-" in roles["user"] and "[END-" in roles["user"]
-    sentinel = roles["user"].split("[BEGIN-", 1)[1].split("]", 1)[0]
-    assert len(sentinel) == 32  # uuid4().hex
-    assert sentinel in roles["system"]
+    marker = roles["user"].split("[BEGIN-", 1)[1].split("]", 1)[0]
+    assert len(marker) == 32  # uuid4().hex
+    assert "[BEGIN-<random>]" in roles["system"]  # the generic rule, not a specific id
+
+
+def test_each_document_gets_its_own_marker():
+    # Per-document markers: a malicious doc can't forge a sibling's fence because
+    # it never sees the sibling's random marker.
+    messages = build_messages(CITATION_AUDIT_SYSTEM, doc_a="aaa", doc_b="bbb")
+    user = next(m["content"] for m in messages if m["role"] == "user")
+    markers = [seg.split("]", 1)[0] for seg in user.split("[BEGIN-")[1:]]
+    assert len(markers) == 2 and markers[0] != markers[1]
 
 
 def test_a_forged_fence_in_the_document_cannot_match_the_real_sentinel():
@@ -47,3 +56,14 @@ def test_a_forged_fence_in_the_document_cannot_match_the_real_sentinel():
     real_sentinel = roles["user"].split("[BEGIN-", 1)[1].split("]", 1)[0]
     assert real_sentinel != "deadbeef"
     assert forged in roles["user"]  # the forged marker is just inert data
+
+
+def test_common_filename_stems_are_sanitized_not_rejected():
+    # A corpus file like "police-report" / "Exhibit 1" must NOT degrade the agent;
+    # the tag is slugified to a safe form while the document is still included.
+    messages = build_messages(CITATION_AUDIT_SYSTEM, **{"police-report": "x", "Exhibit 1": "y"})
+    user = next(m["content"] for m in messages if m["role"] == "user")
+    assert "<police_report>" in user and "</police_report>" in user
+    assert "<exhibit_1>" in user and "</exhibit_1>" in user
+    # Both documents survived (two fences).
+    assert user.count("[BEGIN-") == 2

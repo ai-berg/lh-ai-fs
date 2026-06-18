@@ -4,6 +4,10 @@ from pathlib import Path
 
 DOCUMENTS_DIR = Path(__file__).resolve().parent.parent / "documents"
 
+# The document under audit. Single source of truth so agents and the orchestrator
+# don't each re-declare the corpus contract.
+MSJ_DOC = "motion_for_summary_judgment"
+
 
 def load_documents() -> dict[str, str]:
     """Load every .txt case document as ``{stem: content}``."""

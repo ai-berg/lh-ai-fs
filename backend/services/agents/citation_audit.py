@@ -11,11 +11,10 @@ import logging
 
 from llm import call_llm_structured
 from prompts import CITATION_AUDIT_SYSTEM, build_messages
+from repositories.document_repository import MSJ_DOC
 from schemas import Citation, CitationAuditOutput
 
 logger = logging.getLogger(__name__)
-
-MSJ_DOC = "motion_for_summary_judgment"
 
 
 async def audit_citations(docs: dict[str, str]) -> list[Citation]:

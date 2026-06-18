@@ -1,0 +1,39 @@
+SUPERIOR COURT OF THE STATE OF CALIFORNIA
+COUNTY OF SAN MATEO
+
+NORTHGATE LOGISTICS, INC.,
+            Plaintiff,
+v.
+BRIGHTWAY MANUFACTURING, LLC,
+            Defendant.
+
+Case No. CIV-2024-11872
+
+MOTION FOR SUMMARY JUDGMENT
+
+Plaintiff Northgate Logistics, Inc. ("Northgate") moves for summary judgment
+against Defendant Brightway Manufacturing, LLC ("Brightway") on its breach of
+contract claim.
+
+STATEMENT OF UNDISPUTED FACTS
+
+1. On January 5, 2023, the parties executed a Supply Agreement under which
+   Brightway agreed to deliver 10,000 units of component SKU-440 to Northgate.
+
+2. The agreed delivery deadline was February 28, 2023.
+
+3. Brightway delivered only 6,000 units, and did so on March 15, 2023 — well
+   after the contractual deadline.
+
+4. The Supply Agreement, at Section 7.2, states: "Time is of the essence, and
+   any delivery after the deadline constitutes a material breach for which the
+   buyer may recover all consequential damages without limitation."
+
+5. As a direct result, Northgate incurred $250,000 in cover damages purchasing
+   replacement components on the open market.
+
+LEGAL ARGUMENT
+
+Brightway's late and incomplete delivery is a material breach as a matter of
+law. The contract's plain language forecloses any dispute. Northgate is entitled
+to judgment and to its full consequential damages.

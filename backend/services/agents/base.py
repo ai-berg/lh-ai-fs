@@ -8,6 +8,7 @@ report (recorded in ``degraded_agents``) instead of crashing the pipeline.
 
 import asyncio
 import logging
+import os
 from typing import Awaitable, Callable, Protocol, TypeVar
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,12 @@ T = TypeVar("T")
 # Generous enough for a reasoning model (GPT-5.5) running a chain-of-thought
 # rubric over the full case file: a single citation-audit pass measured ~50s, so
 # 45s was too tight. This bounds a stuck call without cutting off normal work.
-DEFAULT_TIMEOUT_SECONDS = 120.0
+# Per-agent timeout. 120s is sized for a GPT-5.5 reasoning call with field-ordered
+# chain-of-thought over the full case file (measured ~50-90s); overridable via env so
+# a larger corpus can raise it without a code change. It bounds EACH agent, and the
+# fan-out agents run concurrently, so the fan-out wall-clock is ~one agent, not the
+# sum — the sequential memo step adds its own bounded slice on top.
+DEFAULT_TIMEOUT_SECONDS = float(os.getenv("AGENT_TIMEOUT_SECONDS", "120") or "120")
 
 
 class Agent(Protocol):

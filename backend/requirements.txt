@@ -4,3 +4,9 @@ openai
 python-dotenv
 pydantic
 pyyaml
+# LangChain is used ONLY for the JudicialMemoAgent's synthesis chain (a single
+# prompt|llm|structured-output LCEL pipeline) — the canonical use case for a chain.
+# The fan-out agents stay on the OpenAI SDK directly, where a framework would be pure
+# overhead. See REFLECTION.md for the "use the framework where it pays" rationale.
+langchain-core
+langchain-openai

@@ -5,50 +5,75 @@ against the surrounding case file and reports where the brief misstates its
 authorities or contradicts the record — the *epistemic work* of checking
 citations and record cites, returned as structured, source-grounded JSON.
 
-> **Status:** Tier 1 (core pipeline) and Tier 2 (eval harness + cross-doc
-> consistency + reflection) are implemented and tested, plus a basic structured UI
-> (verdict-colored finding/citation cards). Tier 3's deeper items (≥4 agents,
-> confidence scoring, judicial memo, a full design system) are the remaining
-> stretch — see [Roadmap](#roadmap).
+> **Status:** Tiers 1, 2, and 3 are implemented and tested — four distinct agents,
+> a deterministic confidence-scoring layer, a judicial-memo synthesis agent, a
+> single-command eval harness, graceful degradation, and a structured UI (judicial
+> memo + verdict-colored finding/citation cards with confidence bands). The remaining
+> stretch is depth, not coverage: a fuller design system and the future agents named
+> in the [Roadmap](#roadmap).
 
 ## What it does
 
 `POST /analyze` runs the case documents in `backend/documents/` through a
 multi-agent pipeline and returns a `VerificationReport`:
 
+Four agents with deliberately **distinct, non-overlapping** roles — meaning vs.
+facts vs. words vs. synthesis:
+
 - **Citation Audit Agent** — extracts every legal authority cited in the MSJ,
-  assesses (on internal plausibility) whether it supports the proposition it is
+  assesses (on internal plausibility) whether it *supports* the proposition it is
   cited for, and flags direct-quote overstatements (e.g. an absolute "a hirer is
   *never* liable"). Authorities it cannot confirm are reported as
-  `could_not_verify` — never fabricated as `verified`.
+  `could_not_verify` — never fabricated as `verified`. *(a legal-merits judgment)*
 - **Cross-Document Consistency Agent** — contrasts the MSJ's factual assertions
   against the police report, medical records, and witness statement, citing the
   **minimal verbatim span** that contains each conflict (e.g. the incident date,
-  whether fall-arrest PPE was worn).
+  whether fall-arrest PPE was worn). *(a fact-vs-fact check)*
+- **Quote Accuracy Agent** — checks whether passages the MSJ quotes from the
+  case-file documents are *faithful* to their source (words quietly removed,
+  inserted, or altered), distinct from whether an authority supports a proposition.
+  *(a textual-fidelity check)*
+- **Judicial Memo Agent** — synthesizes the confirmed, highest-confidence findings
+  into a **one-paragraph bench memo** for a judge. Decision support, not
+  displacement: it summarizes what the audit found and how certain it is, and never
+  opines on the merits. *(the only LangChain-based agent — see below)*
 
 Every finding is **grounded**: a quote that does not literally exist in its cited
 source document is rejected and the finding collapses to `could_not_verify`. This
 is the anti-hallucination guarantee — the pipeline points at real text or admits
 uncertainty.
 
+Each flag also carries a **deterministic confidence band** (`services/confidence.py`)
+derived from verifiable signals — chiefly how many *distinct* reference documents
+corroborate it — not a number the model self-reports. `HIGH` means independent
+documents agree; the score is reproducible by hand and auditable on hover in the UI.
+
 ## Architecture
 
 ```
 POST /analyze
    └─ orchestrator.run_pipeline(docs)
-        ├─ CitationAuditAgent        ─┐  (fan out concurrently)
-        └─ CrossDocConsistencyAgent  ─┘
+        ├─ CitationAuditAgent        ─┐
+        ├─ CrossDocConsistencyAgent  ─┤  (3 agents fan out concurrently)
+        └─ QuoteAccuracyAgent        ─┘
               └─ grounding.validate_grounding()   ← drops ungrounded findings
-        → VerificationReport { citations, flags, degraded_agents }
+              └─ confidence.score_confidence()    ← deterministic band per flag
+              └─ JudicialMemoAgent  (LangChain LCEL)  ← synthesizes confirmed findings
+        → VerificationReport { citations, flags, judicial_memo, degraded_agents }
 ```
 
 - **Routes → Services → Repositories.** `main.py` is a thin route; agents and
   orchestration live in `services/`; document loading in `repositories/`.
 - **Structured data between agents** (Pydantic models in `schemas.py`), never raw
-  text blobs. Uses OpenAI **native structured outputs** — no heavyweight
-  framework.
-- **Resilient orchestration**: agents fan out concurrently; a failing agent is
-  recorded in `degraded_agents` and the pipeline still returns a valid report.
+  text blobs. Agents emit a `FindingDraft`; the orchestrator promotes it to a scored
+  `Finding` — confidence is assigned post-grounding, never self-reported.
+- **OpenAI SDK directly for the fan-out; LangChain only for the memo.** The three
+  parallel agents have no chaining/retrieval/tool-loop, so a framework there is pure
+  overhead; the memo is a single `prompt | llm | structured_output` LCEL chain — the
+  canonical use case. Framework used where it pays, not by default (see REFLECTION).
+- **Resilient orchestration**: all four agents (memo included) run through one
+  `run_agent` wrapper — timeout + one retry + `degraded_agents` tracking — so any
+  single failure degrades that slice without sinking the report.
 - **Prompt-injection defense**: untrusted document text is fenced with a
   **per-document** random sentinel before substitution (`prompts.py`) — each
   document gets its own marker, so a malicious document can't forge a *sibling*
@@ -160,8 +185,12 @@ the planted flaws across the gold set's cases, not on the test count.)
 | 1 | Grounding / anti-hallucination | ✅ done |
 | 2 | Cross-document consistency | ✅ done |
 | 2 | **Eval harness** (`python run_evals.py`): precision, recall, grounding-consistency + gate ablation | ✅ done |
-| 3 | Confidence scoring, judicial-memo agent (≥4 agents) | ⏳ planned |
-| 3 | Structured UI | ◑ basic (verdict-colored finding/citation cards + evidence spans; not a full design system) |
+| 3 | **4 distinct agents** (Citation, CrossDoc, QuoteAccuracy, JudicialMemo) | ✅ done |
+| 3 | **Deterministic confidence scoring** (band + reasoning per flag) | ✅ done |
+| 3 | **Judicial-memo agent** (LangChain LCEL, one-paragraph bench memo) | ✅ done |
+| 3 | **Graceful degradation** (all agents through `run_agent`: timeout + retry + `degraded_agents`) | ✅ done |
+| 3 | Structured UI (judicial memo + finding/citation cards + confidence bands) | ✅ done |
+| 3 | Fuller design system / future agents (temporal-arithmetic, omission) | ⏳ planned |
 | — | [Reflection document](REFLECTION.md) | ✅ done |
 
 ## Design influences

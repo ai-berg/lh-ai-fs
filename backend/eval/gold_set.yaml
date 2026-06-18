@@ -28,6 +28,14 @@
 # - DELIBERATELY EXCLUDED: the "schedule-pressure omission" (foreman Donner). It is
 #   the most interpretive defect (an omission, not a contradiction) and scoring it
 #   would import subjective judgment into recall. Noted as out-of-scope, not missed.
+# - NO QUOTE-ACCURACY FLAW IN THIS CASE (honest note): the Rivera MSJ only quotes the
+#   fictional case-law AUTHORITIES verbatim (Privette, Kellerman) — it never quotes a
+#   case-file document (police report / medical / witness), so there is no faithful-
+#   vs-altered quotation of a source we possess to plant here. The QuoteAccuracyAgent
+#   is therefore exercised by the SYNTHETIC contract case (`altered_clause_quote`,
+#   a damages-cap clause quoted with its limiting language removed), not by Rivera.
+#   Planting a fake quote-alteration here just to cover the agent would be exactly the
+#   label-against-what-you-want anti-pattern the rest of this gold set avoids.
 
 case: rivera_v_harmon
 documents: [motion_for_summary_judgment, police_report, medical_records_excerpt, witness_statement]

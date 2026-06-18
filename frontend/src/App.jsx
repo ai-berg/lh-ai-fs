@@ -11,6 +11,16 @@ const STATUS_COLOR = {
   verified: '#2f855a',
 }
 
+// Confidence band colors are intentionally NEUTRAL (greys), distinct from the verdict
+// colors above: the verdict says WHAT the audit found, the band says HOW SURE the
+// pipeline is. Keeping the two scales visually separate stops a reader from conflating
+// "high confidence" with "severe" — they're orthogonal axes.
+const CONFIDENCE_COLOR = {
+  high: '#2d3748',
+  medium: '#718096',
+  low: '#a0aec0',
+}
+
 function Badge({ text, color }) {
   return (
     <span style={{
@@ -44,6 +54,16 @@ function FlagCard({ flag }) {
       <div style={{ marginBottom: '8px' }}>
         <Badge text={flag.status} color={color} />
         <Badge text={flag.flag_type} color="#34495e" />
+        {flag.confidence && (
+          // Confidence badge carries the deterministic reasoning in its title, so the
+          // score is auditable on hover — never an opaque number.
+          <span title={flag.confidence.reasoning}>
+            <Badge
+              text={`confidence: ${flag.confidence.band}`}
+              color={CONFIDENCE_COLOR[flag.confidence.band] || '#718096'}
+            />
+          </span>
+        )}
       </div>
       <div style={{ fontWeight: 600, marginBottom: '4px' }}>{flag.msj_claim}</div>
       {flag.explanation && (
@@ -93,6 +113,29 @@ function CitationCard({ cite }) {
         <div style={{ fontSize: '13px', color: '#b7791f', marginTop: '4px' }}>{cite.issue}</div>
       )}
     </Card>
+  )
+}
+
+// The judicial memo is the synthesis for a judge — shown FIRST and visually set apart
+// (a bench-memo banner), because it's the human-readable entry point into the report.
+// The structured cards below are the auditable detail behind it.
+function MemoCard({ memo }) {
+  return (
+    <div style={{
+      border: '1px solid #cbd5e0', borderLeft: '4px solid #2b6cb0', borderRadius: '6px',
+      padding: '16px 18px', marginBottom: '24px', background: '#ebf4ff',
+    }}>
+      <div style={{ fontWeight: 700, fontSize: '13px', color: '#2b6cb0', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        Judicial Memo
+      </div>
+      <p style={{ margin: 0, lineHeight: 1.55, color: '#1a202c' }}>{memo.summary}</p>
+      {memo.grounded_in?.length > 0 && (
+        <div style={{ fontSize: '12px', color: '#4a5568', marginTop: '8px' }}>
+          Synthesized from {memo.grounded_in.length} confirmed finding
+          {memo.grounded_in.length === 1 ? '' : 's'}.
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -159,6 +202,8 @@ function App() {
               ⚠ Partial coverage — degraded agents: {report.degraded_agents.join(', ')}
             </div>
           )}
+
+          {report.judicial_memo && <MemoCard memo={report.judicial_memo} />}
 
           <h2 style={{ fontSize: '18px' }}>Findings ({report.flags?.length || 0})</h2>
           {report.flags?.length

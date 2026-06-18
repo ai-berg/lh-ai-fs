@@ -55,21 +55,36 @@ async def _cross_doc_agent_ok(docs):
     return [_grounded_finding()]
 
 
+async def _quote_agent_empty(docs):
+    # Default fake for the 4th fan-out agent: most tests don't exercise quote-accuracy,
+    # so it returns nothing and stays out of the way.
+    return []
+
+
+async def _memo_noop(findings):
+    # Default fake memo: avoids a real LangChain/LLM call in the orchestrator tests.
+    return None
+
+
 async def _agent_boom(docs):
     raise RuntimeError("simulated agent failure")
 
 
 @pytest.mark.asyncio
-async def test_assembles_report_from_both_agents():
+async def test_assembles_report_from_the_agents():
     report = await run_pipeline(
         DOCS,
         citation_agent=_citation_agent_ok,
         cross_doc_agent=_cross_doc_agent_ok,
+        quote_accuracy_agent=_quote_agent_empty,
+        memo_agent=_memo_noop,
     )
 
     assert len(report.citations) == 1
     assert len(report.flags) == 1
     assert report.degraded_agents == []
+    # Confidence is now scored on every flag.
+    assert report.flags[0].confidence is not None
 
 
 @pytest.mark.asyncio
@@ -92,6 +107,8 @@ async def test_grounds_findings_before_reporting():
         DOCS,
         citation_agent=_citation_agent_ok,
         cross_doc_agent=hallucinating_agent,
+        quote_accuracy_agent=_quote_agent_empty,
+        memo_agent=_memo_noop,
     )
 
     assert report.flags[0].status == VerificationStatus.COULD_NOT_VERIFY
@@ -104,6 +121,8 @@ async def test_failed_agent_is_degraded_not_fatal():
         DOCS,
         citation_agent=_agent_boom,
         cross_doc_agent=_cross_doc_agent_ok,
+        quote_accuracy_agent=_quote_agent_empty,
+        memo_agent=_memo_noop,
     )
 
     # Pipeline still returns; the cross-doc flag survives; failure is recorded.
@@ -113,16 +132,38 @@ async def test_failed_agent_is_degraded_not_fatal():
 
 
 @pytest.mark.asyncio
-async def test_all_agents_failing_still_returns_valid_report():
+async def test_all_fanout_agents_failing_still_returns_valid_report():
     report = await run_pipeline(
         DOCS,
         citation_agent=_agent_boom,
         cross_doc_agent=_agent_boom,
+        quote_accuracy_agent=_agent_boom,
+        memo_agent=_memo_noop,
     )
 
     assert report.citations == []
     assert report.flags == []
-    assert len(report.degraded_agents) == 2
+    # All three fan-out agents degraded; the pipeline still returns a valid report.
+    assert len(report.degraded_agents) == 3
+
+
+@pytest.mark.asyncio
+async def test_memo_failure_degrades_gracefully():
+    # A memo agent that raises must not sink the report — it's recorded and memo is None.
+    async def _memo_boom(findings):
+        raise RuntimeError("memo failure")
+
+    report = await run_pipeline(
+        DOCS,
+        citation_agent=_citation_agent_ok,
+        cross_doc_agent=_cross_doc_agent_ok,
+        quote_accuracy_agent=_quote_agent_empty,
+        memo_agent=_memo_boom,
+    )
+
+    assert report.judicial_memo is None
+    assert "JudicialMemoAgent" in report.degraded_agents
+    assert len(report.flags) == 1  # the report still carries its findings
 
 
 @pytest.mark.asyncio

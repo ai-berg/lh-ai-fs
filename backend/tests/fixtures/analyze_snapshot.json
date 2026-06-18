@@ -3,21 +3,21 @@
     {
       "authority": "Privette v. Superior Court",
       "reporter": "5 Cal.4th 689, 695, 702 (1993)",
-      "proposition": "A hirer of an independent contractor is presumptively, or categorically, not liable for injuries sustained by the contractor's employees while performing the contracted work.",
+      "proposition": "A hirer of an independent contractor is presumptively, and allegedly categorically, not liable for injuries sustained by the contractor’s employees while performing the contracted work.",
       "is_direct_quote": true,
       "quoted_text": "A hirer is never liable for injuries sustained by an independent contractor's employees when the injuries arise from the contracted work.",
-      "assessment_reasoning": "Proposition attributed: the brief says a hirer of an independent contractor is presumptively not liable for injuries to the contractor's employees arising from contracted work, and then uses Privette to argue Rivera's claims are barred. Internal evidence: the brief also presents a direct quote attributed to Privette stating, \"A hirer is never liable for injuries sustained by an independent contractor's employees when the injuries arise from the contracted work.\" That quoted formulation is absolute and is in tension with the brief's own immediately preceding \"presumptively not liable\" phrasing. From the brief alone, the absolute version cannot be confirmed as a reliable statement of the doctrine.",
+      "assessment_reasoning": "Proposition attributed: California’s Privette doctrine makes a hirer of an independent contractor presumptively not liable—and, as quoted by the motion, “never liable”—for injuries to the contractor’s employees arising from the contracted work. Internal evidence: the motion first describes the rule as a presumption, but then presents an absolute quoted statement that a hirer is “never liable.” Those formulations are internally in tension because a presumption implies possible exceptions while “never” does not. Verdict: contradicted as to the motion’s absolute formulation.",
       "support_assessment": "contradicted",
       "flag_type": "overstatement",
-      "issue": "The MSJ uses an absolute 'never liable' formulation that is internally inconsistent with its own 'presumptively not liable' description."
+      "issue": "The motion uses an absolute 'never liable' formulation that is internally inconsistent with its own preceding 'presumptively not liable' description."
     },
     {
       "authority": "Whitmore v. Delgado Scaffolding Co.",
       "reporter": "334 F. Supp. 2d 1189, 1195 (C.D. Cal. 2004)",
-      "proposition": "Summary judgment is proper for a hirer where the subcontractor controlled scaffolding operations and the injured worker assumed risks inherent to the trade.",
+      "proposition": "A hirer is entitled to summary judgment where the subcontractor controlled scaffolding operations and the injured worker assumed risks inherent to the trade.",
       "is_direct_quote": false,
       "quoted_text": null,
-      "assessment_reasoning": "Proposition attributed: the brief cites Whitmore as granting summary judgment to a hirer where the subcontractor controlled scaffolding operations and the injured worker assumed risks inherent to the trade. Internal evidence: the brief provides only a parenthetical characterization and no quotation or other internal content from the case. The cited proposition is plausible in context, but the brief itself does not supply enough evidence to confirm the case actually says that.",
+      "assessment_reasoning": "Proposition attributed: summary judgment is proper for a hirer where the subcontractor controlled scaffolding operations and the injured worker assumed risks inherent to the scaffolding trade. Internal evidence: the motion provides only a parenthetical description; it supplies no quotation or factual/legal analysis from the case itself. Verdict: could_not_verify.",
       "support_assessment": "could_not_verify",
       "flag_type": null,
       "issue": null
@@ -25,174 +25,224 @@
     {
       "authority": "Kellerman v. Pacific Coast Construction, Inc.",
       "reporter": "887 F.2d 1204, 1209 (9th Cir. 1991)",
-      "proposition": "A party's full OSHA compliance creates a rebuttable presumption that it met the negligence standard of care, and Harmon is entitled to that presumption.",
+      "proposition": "OSHA compliance creates a rebuttable presumption that Harmon exercised reasonable care regarding worksite safety.",
       "is_direct_quote": true,
       "quoted_text": "Where an employer demonstrates full compliance with applicable OSHA standards, it is entitled to a rebuttable presumption that it met the standard of care in negligence.",
-      "assessment_reasoning": "Proposition attributed: Harmon's OSHA compliance creates a rebuttable presumption that Harmon exercised reasonable care regarding worksite safety. Internal evidence: the quoted language says, \"Where an employer demonstrates full compliance with applicable OSHA standards, it is entitled to a rebuttable presumption that it met the standard of care in negligence.\" The MSJ's own facts state Rivera was employed by Apex Staffing Solutions, not Harmon. Thus the quoted rule, as presented, addresses an employer, while the brief applies it to Harmon as general contractor/hirer.",
+      "assessment_reasoning": "Proposition attributed: Harmon’s OSHA compliance creates a rebuttable presumption that it exercised reasonable care for worksite safety. Internal evidence: the quoted text says an “employer” demonstrating full compliance with applicable OSHA standards is entitled to a rebuttable presumption that it met the negligence standard of care. But the motion’s own facts say Apex, not Harmon, was Rivera’s employer, and the motion equates passing OSHA inspections with “full compliance.” Verdict: contradicted as applied to Harmon on the motion’s own wording.",
       "support_assessment": "contradicted",
       "flag_type": "citation_unsupported",
-      "issue": "The quoted rule is limited to an employer, but the MSJ applies it to Harmon despite stating Apex was Rivera's employer."
+      "issue": "The quoted rule is limited to an employer showing full OSHA compliance, while the motion applies it to Harmon despite stating Apex was Rivera’s employer and relying on inspection history rather than quoted proof of full compliance."
     },
     {
       "authority": "Seabright Insurance Co. v. US Airways, Inc.",
       "reporter": "52 Cal.4th 590, 598 (2011)",
-      "proposition": "Compliance with statutory safety requirements is highly probative of due care.",
+      "proposition": "Compliance with statutory safety requirements is highly probative of due care and supports insulating Harmon from tort liability for alleged safety failures.",
       "is_direct_quote": false,
       "quoted_text": null,
-      "assessment_reasoning": "Proposition attributed: the brief says the California Supreme Court has recognized that compliance with statutory safety requirements is highly probative of due care. Internal evidence: the brief provides no quotation from Seabright and no explanation of the facts or holding beyond that characterization. The proposition is not internally contradicted, but cannot be confirmed from the brief alone.",
+      "assessment_reasoning": "Proposition attributed: compliance with statutory safety requirements is highly probative of due care, and Harmon's OSHA record effectively insulates it from tort liability. Internal evidence: the motion provides no quotation from Seabright. Its own wording states only that compliance is “highly probative,” which is materially weaker than “effectively insulating” a defendant from tort liability. Verdict: could_not_verify, with an overstatement concern.",
       "support_assessment": "could_not_verify",
-      "flag_type": null,
-      "issue": null
-    },
-    {
-      "authority": "Cal. Code Civ. Proc. § 335.1",
-      "reporter": null,
-      "proposition": "The statute of limitations for personal injury claims is two years, and Rivera's claims are time-barred or vulnerable to an accrual-based limitations challenge.",
-      "is_direct_quote": false,
-      "quoted_text": null,
-      "assessment_reasoning": "Proposition attributed: the brief states that the California personal-injury limitations period is two years, while arguing Rivera's claims are time-barred or subject to an accrual challenge. Internal evidence: the brief states the incident occurred March 14, 2021 and the complaint was filed March 10, 2023, and expressly admits the filing \"falls nominally within this window.\" If the two-year period described by the brief applies, the brief's own dates do not support a time-bar conclusion.",
-      "support_assessment": "contradicted",
-      "flag_type": "citation_unsupported",
-      "issue": "The MSJ admits the complaint was filed within the asserted two-year window, so the statute as described does not support summary judgment on limitations."
+      "flag_type": "overstatement",
+      "issue": "The motion leaps from 'highly probative of due care' to 'effectively insulating' Harmon from tort liability without internal support."
     },
     {
       "authority": "Torres v. Granite Falls Dev. Corp.",
       "reporter": "198 Cal.App.4th 223 (2011)",
-      "proposition": "OSHA compliance or a clean OSHA inspection record can effectively insulate a defendant from tort liability based on alleged worksite safety failures.",
+      "proposition": "Additional support for the proposition that OSHA compliance or an unblemished inspection record establishes due care and effectively insulates the defendant from tort liability.",
       "is_direct_quote": false,
       "quoted_text": null,
-      "assessment_reasoning": "Proposition attributed: in footnote 1, the case is cited after the statement that Harmon's OSHA inspection record met or exceeded regulatory requirements and \"effectively insulating\" Harmon from tort liability based on alleged safety failures. Internal evidence: the brief provides no quotation, parenthetical, or explanation of Torres. The asserted insulation-from-liability proposition is broad, and the brief itself supplies no internal support tying this case to that proposition.",
+      "assessment_reasoning": "Proposition attributed: this case additionally supports the claim that an OSHA inspection/compliance record demonstrates due care and insulates Harmon from tort liability. Internal evidence: the footnote is a bare string citation with no parenthetical, quote, or explanation. Verdict: could_not_verify.",
       "support_assessment": "could_not_verify",
-      "flag_type": "overstatement",
-      "issue": "The case is used in a string cite for the broad claim that OSHA compliance effectively insulates Harmon from tort liability, without internal support."
+      "flag_type": "citation_unsupported",
+      "issue": "Bare string cite; the motion supplies no internal evidence showing how the case supports the OSHA-compliance or tort-insulation proposition."
     },
     {
       "authority": "Blackwell v. Sunrise Contractors, Inc.",
       "reporter": "45 Cal.App.4th 1012 (1996)",
-      "proposition": "OSHA compliance or a clean OSHA inspection record can effectively insulate a defendant from tort liability based on alleged worksite safety failures.",
+      "proposition": "Additional support for the proposition that OSHA compliance or an unblemished inspection record establishes due care and effectively insulates the defendant from tort liability.",
       "is_direct_quote": false,
       "quoted_text": null,
-      "assessment_reasoning": "Proposition attributed: in footnote 1, the case is cited after the statement that Harmon's OSHA inspection record met or exceeded regulatory requirements and \"effectively insulating\" Harmon from tort liability based on alleged safety failures. Internal evidence: the brief provides no quotation, parenthetical, or explanation of Blackwell. The asserted insulation-from-liability proposition is broad, and the brief itself supplies no internal support tying this case to that proposition.",
+      "assessment_reasoning": "Proposition attributed: this case additionally supports the claim that an OSHA inspection/compliance record demonstrates due care and insulates Harmon from tort liability. Internal evidence: the footnote is a bare string citation with no parenthetical, quote, or explanation. Verdict: could_not_verify.",
       "support_assessment": "could_not_verify",
-      "flag_type": "overstatement",
-      "issue": "The case is used in a string cite for the broad claim that OSHA compliance effectively insulates Harmon from tort liability, without internal support."
+      "flag_type": "citation_unsupported",
+      "issue": "Bare string cite; the motion supplies no internal evidence showing how the case supports the OSHA-compliance or tort-insulation proposition."
     },
     {
       "authority": "Dixon v. Lone Star Structural, LLC",
       "reporter": "387 S.W.3d 154 (Tex. App. 2012)",
-      "proposition": "OSHA compliance or a clean OSHA inspection record can effectively insulate a defendant from tort liability based on alleged worksite safety failures.",
+      "proposition": "Additional support for the proposition that OSHA compliance or an unblemished inspection record establishes due care and effectively insulates the defendant from tort liability.",
       "is_direct_quote": false,
       "quoted_text": null,
-      "assessment_reasoning": "Proposition attributed: in footnote 1, the case is cited after the statement that Harmon's OSHA inspection record met or exceeded regulatory requirements and \"effectively insulating\" Harmon from tort liability based on alleged safety failures. Internal evidence: the brief provides no quotation, parenthetical, or explanation of Dixon. It is also a Texas appellate citation in a California superior court brief, so the brief does not internally show controlling California support. The asserted insulation-from-liability proposition remains unverified.",
+      "assessment_reasoning": "Proposition attributed: this case additionally supports the claim that an OSHA inspection/compliance record demonstrates due care and insulates Harmon from tort liability. Internal evidence: the footnote is a bare string citation with no parenthetical, quote, or explanation. It is also identified as a Texas appellate authority while the motion concerns California law, with no explanation of relevance. Verdict: could_not_verify.",
       "support_assessment": "could_not_verify",
-      "flag_type": "overstatement",
-      "issue": "The out-of-state case is used in a string cite for the broad claim that OSHA compliance effectively insulates Harmon from tort liability, without internal support."
+      "flag_type": "citation_unsupported",
+      "issue": "Bare out-of-state string cite; the motion supplies no internal evidence showing how the case supports the California OSHA-compliance or tort-insulation proposition."
     },
     {
       "authority": "Okafor v. Brightline Builders, Inc.",
       "reporter": "291 So.3d 614 (Fla. Dist. Ct. App. 2019)",
-      "proposition": "OSHA compliance or a clean OSHA inspection record can effectively insulate a defendant from tort liability based on alleged worksite safety failures.",
+      "proposition": "Additional support for the proposition that OSHA compliance or an unblemished inspection record establishes due care and effectively insulates the defendant from tort liability.",
       "is_direct_quote": false,
       "quoted_text": null,
-      "assessment_reasoning": "Proposition attributed: in footnote 1, the case is cited after the statement that Harmon's OSHA inspection record met or exceeded regulatory requirements and \"effectively insulating\" Harmon from tort liability based on alleged safety failures. Internal evidence: the brief provides no quotation, parenthetical, or explanation of Okafor. It is a Florida appellate citation in a California superior court brief, so the brief does not internally show controlling California support. The asserted insulation-from-liability proposition remains unverified.",
+      "assessment_reasoning": "Proposition attributed: this case additionally supports the claim that an OSHA inspection/compliance record demonstrates due care and insulates Harmon from tort liability. Internal evidence: the footnote is a bare string citation with no parenthetical, quote, or explanation. It is also identified as a Florida appellate authority while the motion concerns California law, with no explanation of relevance. Verdict: could_not_verify.",
       "support_assessment": "could_not_verify",
-      "flag_type": "overstatement",
-      "issue": "The out-of-state case is used in a string cite for the broad claim that OSHA compliance effectively insulates Harmon from tort liability, without internal support."
+      "flag_type": "citation_unsupported",
+      "issue": "Bare out-of-state string cite; the motion supplies no internal evidence showing how the case supports the California OSHA-compliance or tort-insulation proposition."
     },
     {
       "authority": "Nguyen v. Allied Pacific Construction Co.",
       "reporter": "112 Cal.App.4th 845 (2003)",
-      "proposition": "OSHA compliance or a clean OSHA inspection record can effectively insulate a defendant from tort liability based on alleged worksite safety failures.",
+      "proposition": "Additional support for the proposition that OSHA compliance or an unblemished inspection record establishes due care and effectively insulates the defendant from tort liability.",
       "is_direct_quote": false,
       "quoted_text": null,
-      "assessment_reasoning": "Proposition attributed: in footnote 1, the case is cited after the statement that Harmon's OSHA inspection record met or exceeded regulatory requirements and \"effectively insulating\" Harmon from tort liability based on alleged safety failures. Internal evidence: the brief provides no quotation, parenthetical, or explanation of Nguyen. The asserted insulation-from-liability proposition is broad, and the brief itself supplies no internal support tying this case to that proposition.",
+      "assessment_reasoning": "Proposition attributed: this case additionally supports the claim that an OSHA inspection/compliance record demonstrates due care and insulates Harmon from tort liability. Internal evidence: the footnote is a bare string citation with no parenthetical, quote, or explanation. Verdict: could_not_verify.",
       "support_assessment": "could_not_verify",
-      "flag_type": "overstatement",
-      "issue": "The case is used in a string cite for the broad claim that OSHA compliance effectively insulates Harmon from tort liability, without internal support."
+      "flag_type": "citation_unsupported",
+      "issue": "Bare string cite; the motion supplies no internal evidence showing how the case supports the OSHA-compliance or tort-insulation proposition."
     },
     {
       "authority": "Reeves v. Summit Engineering Group",
       "reporter": "78 Cal.App.4th 531 (2000)",
-      "proposition": "OSHA compliance or a clean OSHA inspection record can effectively insulate a defendant from tort liability based on alleged worksite safety failures.",
+      "proposition": "Additional support for the proposition that OSHA compliance or an unblemished inspection record establishes due care and effectively insulates the defendant from tort liability.",
       "is_direct_quote": false,
       "quoted_text": null,
-      "assessment_reasoning": "Proposition attributed: in footnote 1, the case is cited after the statement that Harmon's OSHA inspection record met or exceeded regulatory requirements and \"effectively insulating\" Harmon from tort liability based on alleged safety failures. Internal evidence: the brief provides no quotation, parenthetical, or explanation of Reeves. The asserted insulation-from-liability proposition is broad, and the brief itself supplies no internal support tying this case to that proposition.",
+      "assessment_reasoning": "Proposition attributed: this case additionally supports the claim that an OSHA inspection/compliance record demonstrates due care and insulates Harmon from tort liability. Internal evidence: the footnote is a bare string citation with no parenthetical, quote, or explanation. Verdict: could_not_verify.",
       "support_assessment": "could_not_verify",
-      "flag_type": "overstatement",
-      "issue": "The case is used in a string cite for the broad claim that OSHA compliance effectively insulates Harmon from tort liability, without internal support."
+      "flag_type": "citation_unsupported",
+      "issue": "Bare string cite; the motion supplies no internal evidence showing how the case supports the OSHA-compliance or tort-insulation proposition."
+    },
+    {
+      "authority": "California Code of Civil Procedure § 335.1",
+      "reporter": null,
+      "proposition": "The personal-injury limitations period is two years, and Rivera’s filing is time-barred or subject to a limitations challenge.",
+      "is_direct_quote": false,
+      "quoted_text": null,
+      "assessment_reasoning": "Proposition attributed: California Code of Civil Procedure section 335.1 provides a two-year statute of limitations for personal injury claims, and Rivera’s claims are time-barred or potentially time-barred. Internal evidence: the motion states the incident occurred March 14, 2021 and the complaint was filed March 10, 2023, which it calculates as one year and 362 days later; it also admits the filing falls “nominally within this window.” That internal admission conflicts with the section heading and time-bar argument. Verdict: contradicted as to the time-bar use.",
+      "support_assessment": "contradicted",
+      "flag_type": "citation_unsupported",
+      "issue": "The motion’s own dates and statement that the filing falls within the two-year window undermine reliance on the statute to claim the action is time-barred."
     }
   ],
   "flags": [
     {
-      "flag_type": "cross_doc_inconsistency",
-      "msj_claim": "This action arises from a workplace incident on March 14, 2021; on or about March 14, 2021, Rivera was working on scaffolding when it gave way; the incident giving rise to this action occurred on March 14, 2021.",
-      "comparison_reasoning": "The MSJ asserts that the workplace incident occurred on March 14, 2021, including in the introduction, UMF 3, and the limitations argument. The reference documents identify the same scaffolding-collapse incident at the same project site as occurring on March 12, 2021. That is an objective date conflict.",
+      "msj_claim": "This action arises from a workplace incident on March 14, 2021; on or about March 14, 2021, Rivera was working on scaffolding when it gave way.",
+      "comparison_reasoning": "The MSJ repeatedly asserts that the scaffolding incident occurred on March 14, 2021. The police report identifies the same workplace/scaffolding incident at 2200 West Olympic Boulevard involving Carlos Rivera as occurring on March 12, 2021. That is a direct date conflict.",
       "status": "contradicted",
+      "flag_type": "cross_doc_inconsistency",
       "evidence": [
         {
           "source_doc": "police_report",
           "quote": "Date of Incident:  March 12, 2021",
-          "locator": "header"
-        },
-        {
-          "source_doc": "medical_records_excerpt",
-          "quote": "workplace accident occurring at approximately 10:45 AM on March 12, 2021.",
-          "locator": "History of Present Illness"
-        },
-        {
-          "source_doc": "witness_statement",
-          "quote": "the incident that occurred on March 12, 2021",
-          "locator": "opening paragraph"
+          "locator": null
         }
       ],
-      "explanation": "The MSJ’s March 14, 2021 incident date conflicts with the March 12, 2021 incident date stated in the police report, medical records, and witness statement.",
-      "raised_by": "CrossDocConsistencyAgent"
+      "explanation": "The MSJ’s March 14, 2021 incident date conflicts with the police report’s March 12, 2021 incident date.",
+      "raised_by": "CrossDocConsistencyAgent",
+      "confidence": {
+        "value": 0.55,
+        "band": "medium",
+        "reasoning": "Assertive contradicted flag grounded in 1 source — single-source, so confidence is moderate pending corroboration.",
+        "signals": {
+          "assertive": true,
+          "corroborating_sources": 1
+        }
+      }
     },
     {
-      "flag_type": "factual_contradiction",
       "msj_claim": "Rivera was not wearing required personal protective equipment at the time of the incident, including fall-arrest equipment mandated by site safety protocols.",
-      "comparison_reasoning": "The MSJ asserts that Rivera was not wearing required PPE, including fall-arrest equipment, at the time of the incident. The police report states that Rivera was wearing a hard hat and harness consistent with site requirements, and that the harness lanyard was attached to Rivera but pulled free from the anchor point. The witness statement also states he was wearing his hard hat, safety harness, and high-visibility vest. These are direct factual contradictions.",
+      "comparison_reasoning": "The MSJ asserts Rivera was not wearing required PPE, including fall-arrest equipment, at the time of the incident. The witness statement says Carlos was wearing a hard hat, safety harness, and high-visibility vest consistent with site PPE requirements. The police report likewise says the site supervisor confirmed Rivera was wearing a hard hat and harness consistent with site requirements. These references state the opposite of the MSJ’s PPE assertion.",
       "status": "contradicted",
+      "flag_type": "factual_contradiction",
       "evidence": [
-        {
-          "source_doc": "police_report",
-          "quote": "Rivera was wearing a hard hat and harness consistent with site requirements at the time of the collapse.",
-          "locator": "Equipment and Safety Gear"
-        },
-        {
-          "source_doc": "police_report",
-          "quote": "The harness lanyard was found still attached to Rivera but had pulled free from the scaffolding anchor point when the structure gave way.",
-          "locator": "Equipment and Safety Gear"
-        },
         {
           "source_doc": "witness_statement",
           "quote": "Carlos was wearing his hard hat, safety harness, and high-visibility vest, consistent with site PPE requirements.",
-          "locator": "Events Prior to the Incident"
+          "locator": null
+        },
+        {
+          "source_doc": "police_report",
+          "quote": "Rivera was wearing a hard hat and harness consistent with site requirements at the time of the collapse.",
+          "locator": null
         }
       ],
-      "explanation": "The reference documents state Rivera was wearing site-required PPE, including a harness and lanyard, contrary to the MSJ’s assertion that he was not wearing required PPE or fall-arrest equipment.",
-      "raised_by": "CrossDocConsistencyAgent"
+      "explanation": "The MSJ says Rivera was not wearing required PPE, but both the witness statement and police report state that he was wearing required safety gear, including a harness.",
+      "raised_by": "CrossDocConsistencyAgent",
+      "confidence": {
+        "value": 0.75,
+        "band": "medium",
+        "reasoning": "Assertive contradicted flag grounded in 2 sources — corroborated across 2 independent documents, the strongest deterministic signal of a real contradiction.",
+        "signals": {
+          "assertive": true,
+          "corroborating_sources": 2
+        }
+      }
     },
     {
-      "flag_type": "factual_contradiction",
-      "msj_claim": "Apex Staffing Solutions — not Harmon — was the employer responsible for scaffolding operations and for ensuring its employees followed appropriate safety procedures; subcontractor controlled scaffolding operations.",
-      "comparison_reasoning": "The MSJ asserts that Apex—not Harmon—controlled or was responsible for scaffolding operations and safety procedures. The reference documents state that Harmon’s project foreman Ray Donner directed Rivera and the crew to begin work on the specific east-side scaffolding section, and the witness states Donner personally directed them to work on that section and dismissed a base-plate safety concern. That conflicts with the MSJ’s categorical factual assertion that Harmon was not involved in control or responsibility over the scaffolding work.",
+      "msj_claim": "Apex Staffing Solutions — not Harmon — was the employer responsible for scaffolding operations and for ensuring its employees followed appropriate safety procedures.",
+      "comparison_reasoning": "The MSJ asserts Apex, not Harmon, was responsible for scaffolding operations and implies Harmon did not control the manner of the scaffolding work. The police report states Harmon’s project foreman directed Rivera and his crew to begin work on the specific east-side scaffolding section. The witness statement further says the Harmon foreman was told about the base-plate issue and told the crew to proceed. Those facts conflict with the MSJ’s assertion that Harmon was not involved in directing the scaffolding work.",
       "status": "contradicted",
+      "flag_type": "factual_contradiction",
       "evidence": [
         {
           "source_doc": "police_report",
           "quote": "Donner stated that he had directed Rivera and his crew to begin work on the east-side scaffolding section earlier that morning.",
-          "locator": "Witness Information"
+          "locator": null
         },
         {
           "source_doc": "witness_statement",
-          "quote": "Donner had personally directed us to work on that section that morning and dismissed my concern about the base plate.",
-          "locator": "After the Incident"
+          "quote": "Donner told me, \"We don't have time to re-do the base. It's been fine. Just get up there and get it done.\"",
+          "locator": null
         }
       ],
-      "explanation": "The reference documents attribute specific direction and dismissal of a scaffolding safety concern to Harmon’s foreman, contradicting the MSJ’s categorical statement that Apex, not Harmon, controlled or was responsible for the scaffolding operations.",
-      "raised_by": "CrossDocConsistencyAgent"
+      "explanation": "The reference documents indicate Harmon’s foreman directed the crew to work on the east-side scaffolding and told them to proceed despite a reported base-plate concern, contradicting the MSJ’s characterization that scaffolding operations were solely Apex’s responsibility and not directed by Harmon.",
+      "raised_by": "CrossDocConsistencyAgent",
+      "confidence": {
+        "value": 0.75,
+        "band": "medium",
+        "reasoning": "Assertive contradicted flag grounded in 2 sources — corroborated across 2 independent documents, the strongest deterministic signal of a real contradiction.",
+        "signals": {
+          "assertive": true,
+          "corroborating_sources": 2
+        }
+      }
+    },
+    {
+      "msj_claim": "Rivera has presented no evidence to rebut the presumption of reasonable care from OSHA compliance; Harmon's safety practices met or exceeded all regulatory requirements.",
+      "comparison_reasoning": "The MSJ asserts there is no evidence rebutting Harmon's OSHA/safety compliance position and characterizes Harmon's safety practices as meeting or exceeding regulatory requirements. The police report describes unstable footing and visible wear in the failed section. The witness statement says the scaffolding was not safe and that concerns had been raised before the collapse. Those facts conflict with the MSJ’s assertion of no contrary safety evidence.",
+      "status": "contradicted",
+      "flag_type": "factual_contradiction",
+      "evidence": [
+        {
+          "source_doc": "police_report",
+          "quote": "The base plates on the failed section appeared to be resting on uneven ground, with one plate sitting on a loose plywood sheet rather than a stable footing.",
+          "locator": null
+        },
+        {
+          "source_doc": "witness_statement",
+          "quote": "The scaffolding he was on was not in safe condition, and concerns about it had been raised before the collapse.",
+          "locator": null
+        }
+      ],
+      "explanation": "The reference documents contain factual evidence of unsafe scaffolding conditions, including unstable footing and raised safety concerns, contrary to the MSJ’s assertion that Rivera had no evidence rebutting Harmon's claimed safety compliance.",
+      "raised_by": "CrossDocConsistencyAgent",
+      "confidence": {
+        "value": 0.75,
+        "band": "medium",
+        "reasoning": "Assertive contradicted flag grounded in 2 sources — corroborated across 2 independent documents, the strongest deterministic signal of a real contradiction.",
+        "signals": {
+          "assertive": true,
+          "corroborating_sources": 2
+        }
+      }
     }
   ],
+  "judicial_memo": {
+    "summary": "The audit flags several medium-confidence factual problems in Harmon’s summary-judgment brief. Most materially, it finds record conflicts with the brief’s assertions that Rivera lacked required PPE, because the witness statement and police report state he was wearing required safety gear including a harness, and that Apex alone controlled scaffolding safety, because the cited documents indicate Harmon’s foreman directed the east-side scaffolding work and told the crew to proceed despite a reported base-plate concern. The audit also finds a medium-confidence contradiction in the brief’s assertion that Rivera has no evidence rebutting Harmon’s claimed OSHA-compliant reasonable care, where the reference materials describe unsafe scaffolding conditions, including unstable footing and raised safety concerns. Finally, it identifies a medium-confidence cross-document inconsistency as to the incident date: the brief uses March 14, 2021, while the police report gives March 12, 2021. These findings identify potential record-accuracy issues in the brief but do not address the merits or how the motion should be resolved.",
+    "grounded_in": [
+      "Rivera was not wearing required personal protective equipment at the time of the incident, including fall-arrest equipment mandated by site safety protocols.",
+      "Apex Staffing Solutions — not Harmon — was the employer responsible for scaffolding operations and for ensuring its employees followed appropriate safety procedures.",
+      "Rivera has presented no evidence to rebut the presumption of reasonable care from OSHA compliance; Harmon's safety practices met or exceeded all regulatory requirements.",
+      "This action arises from a workplace incident on March 14, 2021; on or about March 14, 2021, Rivera was working on scaffolding when it gave way."
+    ]
+  },
   "degraded_agents": []
 }

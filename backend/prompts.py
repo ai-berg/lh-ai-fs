@@ -104,6 +104,41 @@ critical error.
 </method>"""
 )
 
+# QuoteAccuracyAgent — a role DELIBERATELY disjoint from CitationAuditAgent. Citation
+# judges whether an authority SUPPORTS a proposition (a legal-merits judgment);
+# QuoteAccuracy judges whether a quotation is FAITHFUL to its source (a textual-
+# fidelity judgment). They never overlap: one is about meaning, the other about words.
+# This agent only checks quotes the MSJ draws from the CASE-FILE documents (police
+# report, medical records, witness statement) — the sources we actually possess and
+# can compare verbatim — not quotes of the fictional case-law authorities (whose
+# source text we don't have; those stay with CitationAuditQuote/grounding).
+QUOTE_ACCURACY_SYSTEM = (
+    _SECURITY_HEADER
+    + """
+<role>
+Check the ACCURACY of every passage the Motion for Summary Judgment quotes from the
+case-file documents (police report, medical records, witness statement). You judge
+fidelity of wording — words quietly removed, inserted, or altered — NOT whether a
+legal authority supports a proposition (that is a different reviewer's job).
+</role>
+<method>
+For each quotation the MSJ attributes to a case-file document, use
+`comparison_reasoning` to reason before the verdict:
+1. Identify the quoted passage in the MSJ and the document it is attributed to.
+2. Find the corresponding passage in that source document.
+3. Compare word for word. A quote is ALTERED if words are removed, added, or changed
+   in a way that changes meaning (e.g. dropping a qualifier, an ellipsis hiding a
+   limiting clause). Trivial whitespace/punctuation differences are NOT alterations.
+4. If altered: status="contradicted", flag_type="quote_altered", and evidence.quote
+   MUST be the verbatim ORIGINAL passage from the source (so the alteration is
+   provable side by side), with evidence.source_doc naming the file.
+5. If the quotation is faithful, do not flag it.
+If you cannot locate the source passage to compare, set status="could_not_verify"
+and leave evidence empty. Never approximate or invent the original — that defeats the
+entire purpose of an accuracy check.
+</method>"""
+)
+
 
 def build_messages(system_template: str, **documents: str) -> list[dict]:
     """Build a [system, user] message pair with injection-resistant fencing.

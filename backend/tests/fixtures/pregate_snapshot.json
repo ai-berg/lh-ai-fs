@@ -213,6 +213,21 @@
       ],
       "explanation": "The witness statement provides evidence of unsafe scaffolding conditions and pre-incident notice to Harmon's foreman, contrary to the MSJ's assertion that Rivera had no evidence to rebut Harmon's safety position.",
       "raised_by": "CrossDocConsistencyAgent"
+    },
+    {
+      "flag_type": "factual_contradiction",
+      "msj_claim": "[planted] MSJ allegedly states the crane was uninspected",
+      "comparison_reasoning": "[planted] fabricated to exercise the grounding gate",
+      "status": "contradicted",
+      "evidence": [
+        {
+          "source_doc": "police_report",
+          "quote": "the crane had not been inspected in over a year",
+          "locator": "fabricated"
+        }
+      ],
+      "explanation": "[planted] this quote appears in no document; the gate should drop it.",
+      "raised_by": "CrossDocConsistencyAgent"
     }
   ],
   "degraded_agents": []

@@ -49,18 +49,26 @@ def _pre_post_gate(docs: dict, live: bool) -> dict:
     if not live:
         pre_flags = json.loads(PREGATE.read_text())["flags"]
         post_flags = json.loads(SNAPSHOT.read_text())["flags"]
-        return {
-            "pre": grounding_consistency_rate(pre_flags, docs),
-            "post": grounding_consistency_rate(post_flags, docs),
-        }
+    else:
+        from services.orchestrator import apply_grounding, run_agents
 
-    from services.orchestrator import apply_grounding, run_agents
+        citations, findings, _ = asyncio.run(run_agents(docs))
+        _, grounded = apply_grounding(citations, findings, docs)
+        pre_flags = [f.model_dump() for f in findings]
+        post_flags = [f.model_dump() for f in grounded]
 
-    citations, findings, _ = asyncio.run(run_agents(docs))
-    pre = grounding_consistency_rate([f.model_dump() for f in findings], docs)
-    _, grounded = apply_grounding(citations, findings, docs)
-    post = grounding_consistency_rate([f.model_dump() for f in grounded], docs)
-    return {"pre": pre, "post": post}
+    # A finding whose status survives as assertive (not could_not_verify) is one
+    # the gate "kept"; the delta of assertive flags shows the gate dropping a
+    # fully-fabricated finding, which a quote-only count misses.
+    def _assertive(flags):
+        return sum(1 for f in flags if f.get("status") in ("contradicted", "verified"))
+
+    return {
+        "pre": grounding_consistency_rate(pre_flags, docs),
+        "post": grounding_consistency_rate(post_flags, docs),
+        "pre_assertive": _assertive(pre_flags),
+        "post_assertive": _assertive(post_flags),
+    }
 
 
 def _pct(x) -> str:
@@ -114,14 +122,16 @@ def main() -> int:
     # recomputed live with --live.
     ab = _pre_post_gate(docs, args.live)
     src = "live" if args.live else "committed pre-gate vs post-gate fixtures"
+    quotes_removed = ab["pre"]["ungrounded_quotes"] - ab["post"]["ungrounded_quotes"]
+    flags_dropped = ab["pre_assertive"] - ab["post_assertive"]
     print(
         f"\nGROUNDING-GATE ABLATION ({src})"
-        f"\n  pre-gate  (raw model):  {_pct(ab['pre']['rate'])}"
-        f"   {ab['pre']['ungrounded_quotes']}/{ab['pre']['total_quotes']} quotes"
-        f"\n  post-gate (shipped):    {_pct(ab['post']['rate'])}"
-        f"   {ab['post']['ungrounded_quotes']}/{ab['post']['total_quotes']} quotes"
-        f"\n  -> the gate removed {ab['pre']['ungrounded_quotes'] - ab['post']['ungrounded_quotes']}"
-        f" ungrounded quote(s) before they reached the report."
+        f"\n  pre-gate  (raw model):  {ab['pre']['ungrounded_quotes']} ungrounded quote(s),"
+        f" {ab['pre_assertive']} assertive finding(s)"
+        f"\n  post-gate (shipped):    {ab['post']['ungrounded_quotes']} ungrounded quote(s),"
+        f" {ab['post_assertive']} assertive finding(s)"
+        f"\n  -> the gate cleared {quotes_removed} ungrounded quote(s) and downgraded"
+        f" {flags_dropped} fabricated finding(s) to could_not_verify."
     )
     print()
     return 0

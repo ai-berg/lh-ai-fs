@@ -115,7 +115,11 @@ pipeline) and reports, honestly:
   that must not be flagged); without negatives precision is meaningless, so the
   gold set ships three. Plausible-but-unplanted findings go to a
   `pending_adjudication` bucket — scored neither right nor wrong, so the number
-  isn't gamed in either direction.
+  isn't gamed in either direction. **Scope:** precision is measured over the
+  cross-doc *flag* stream; the citation-support stream has no precision denominator
+  here because every authority in this case is fictional (so there is no "real
+  citation that must not be flagged" to label). Read the headline with that
+  denominator — `TP=2`, shown next to the band.
 - **Grounding consistency** — cited quotes that don't literally exist in their
   source. This re-runs the pipeline's *own* grounding check, so it is a regression
   guard, **not** an independent hallucination oracle: it is ~0 post-gate by
@@ -133,7 +137,7 @@ is proven independent of any model output.
 | 1 | Citation extraction + support assessment + quote flags, JSON output | ✅ done |
 | 1 | Grounding / anti-hallucination | ✅ done |
 | 2 | Cross-document consistency | ✅ done |
-| 2 | **Eval harness** (`python eval/run_evals.py`): precision, recall, hallucination | ✅ done |
+| 2 | **Eval harness** (`python run_evals.py`): precision, recall, grounding-consistency + gate ablation | ✅ done |
 | 3 | Confidence scoring, judicial-memo agent (≥4 agents) | ⏳ planned |
 | 3 | Structured UI | ⏳ planned |
 | — | [Reflection document](REFLECTION.md) | ✅ done |

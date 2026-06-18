@@ -4,6 +4,11 @@ __pycache__/
 *$py.class
 venv/
 .env
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+htmlcov/
 
 # Node
 node_modules/
@@ -21,3 +26,10 @@ dist/
 
 # Plans
 docs/plans/
+
+# Internal working notes (PT-BR, not part of the deliverable)
+docs/
+
+# E2E artifacts
+*.png
+.playwright-mcp/

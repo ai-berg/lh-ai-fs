@@ -1,0 +1,52 @@
+# docker-compose.override.yml
+# Hardening layer (sandbox). Auto-merged over docker-compose.yml by `docker compose up`.
+# Goal: run third-party scaffold code while protecting the host machine, without
+# breaking the promised hot-reload or the legitimate OpenAI call.
+# See the "Security note" in README.md for the rationale.
+# Requires Docker Compose v2.24+ (the `!override` merge tag below).
+services:
+  backend:
+    # Publish the port on loopback only -> not reachable from the LAN/Wi-Fi.
+    ports: !override
+      - "127.0.0.1:8002:8002"
+    # Drop ALL Linux capabilities; this app needs none.
+    cap_drop:
+      - ALL
+    security_opt:
+      # Block privilege escalation via setuid/setgid binaries in the container.
+      - "no-new-privileges:true"
+    # Run as a non-root UID. On Docker Desktop (macOS/Windows) bind-mount writes
+    # map to your host user, so 1000 works without breaking the volume. On a
+    # native-Linux host (or CI) where the repo isn't owned by 1000:1000, override
+    # this to your own ids, e.g. `UID=$(id -u) GID=$(id -g) docker compose up`
+    # with `user: "${UID}:${GID}"`, or drop this line to fall back to root.
+    user: "1000:1000"
+    # Hard RAM cap -> a fork bomb / miner / leak cannot exhaust host memory.
+    mem_limit: 512m
+    memswap_limit: 512m        # prevents OOM from being pushed to swap (real cap)
+    # Cap CPU at 1.5 cores -> a busy-loop/miner cannot lock up the whole machine.
+    cpus: "1.5"
+    # Cap process/thread count -> contains fork bombs.
+    pids_limit: 256
+    environment:
+      - HOME=/tmp              # writable HOME for tooling; points at an ephemeral dir
+      - PIP_NO_CACHE_DIR=1
+    # read_only intentionally omitted: uvicorn --reload and the bind-mounted source
+    # tree under /app must stay writable for hot-reload.
+
+  frontend:
+    ports: !override
+      - "127.0.0.1:5175:5175"
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
+    user: "1000:1000"        # see the backend note on overriding UID on native Linux/CI
+    mem_limit: 1g
+    memswap_limit: 1g
+    cpus: "1.5"
+    pids_limit: 512            # vite/esbuild/rollup spawn many workers; 256 is too tight
+    environment:
+      - HOME=/tmp
+      - npm_config_cache=/tmp/.npm
+    # read_only omitted: vite writes its dep-optimizer cache (.vite) under /app.

@@ -70,13 +70,26 @@ def _flaw_caught(flaw: dict, report: dict) -> bool:
         if not cites or len(cites) < min_cov or "CitationAuditAgent" in report.get("degraded_agents", []):
             return False
 
+        # Scope the honesty check to the fictional authorities this flaw covers, if
+        # listed — so a legitimately "verified" REAL authority elsewhere in the
+        # stream doesn't wrongly fail the fictional-authority recall point. When no
+        # list is given (this case: every authority is fictional), check all.
+        targets = flaw.get("fictional_authorities")
+        scoped = (
+            [c for c in cites if any(_contains(c.get("authority", ""), a) for a in targets)]
+            if targets
+            else cites
+        )
+        if not scoped:
+            return False
+
         def _honest(c: dict) -> bool:
             sa = c.get("support_assessment")
             if sa == "verified":
                 return False
             return sa == "could_not_verify" or bool(c.get("flag_type"))
 
-        return all(_honest(c) for c in report["citations"])
+        return all(_honest(c) for c in scoped)
 
     # Citation-support on the CITATION stream: the named authority carries the
     # expected flag. (Only when the flaw is anchored to a citation, not a finding.)

@@ -5,9 +5,10 @@ against the surrounding case file and reports where the brief misstates its
 authorities or contradicts the record — the *epistemic work* of checking
 citations and record cites, returned as structured, source-grounded JSON.
 
-> **Status:** Tier 1 (core pipeline) is implemented and tested. The eval harness
-> (Tier 2) and the additional agents / UI (Tier 3) are in progress — see
-> [Roadmap](#roadmap).
+> **Status:** Tier 1 (core pipeline) and Tier 2 (eval harness + cross-doc
+> consistency + reflection) are implemented and tested. Tier 3 (≥4 agents,
+> confidence scoring, judicial memo, structured UI) is the remaining stretch —
+> see [Roadmap](#roadmap).
 
 ## What it does
 
@@ -111,10 +112,12 @@ generalizes past one fixture — and reports per-case **and aggregate**, honestl
 
 - **Recall** — planted flaws caught, per flaw. The gold set includes a flaw the
   pipeline is *expected to miss* (an intra-document arithmetic slip with no
-  checking agent), so recall reports an honest **4/5**, not a staged 100%.
+  checking agent), so the Rivera case reports an honest **4/5** and the
+  cross-case **aggregate is 6/8** — never a staged 100%.
 - **Precision** — false flags landing on labeled *negatives* (true MSJ statements
   that must not be flagged); without negatives precision is meaningless, so the
-  gold set ships three. Plausible-but-unplanted findings go to a
+  Rivera gold set ships four (including a hard negative the model is tempted to
+  flag but must not). Plausible-but-unplanted findings go to a
   `pending_adjudication` bucket — scored neither right nor wrong, so the number
   isn't gamed in either direction. **Scope:** precision is measured over the
   cross-doc *flag* stream; the citation-support stream has no precision denominator

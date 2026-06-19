@@ -12,6 +12,29 @@ citations and record cites, returned as structured, source-grounded JSON.
 > stretch is depth, not coverage: a fuller design system and the future agents named
 > in the [Roadmap](#roadmap).
 
+## Quickstart (for the reviewer)
+
+Three commands cover everything — run the pipeline, run the tests, run the evals.
+Requires Docker Compose v2.24+.
+
+```bash
+# 1. Configure and start (API on :8002, UI on :5175)
+cp backend/.env.example .env        # then set OPENAI_API_KEY in .env
+docker compose up --build
+
+# 2. Run it — open http://localhost:5175 and click "Run Analysis",
+#    or hit the API directly:
+curl -X POST http://localhost:8002/analyze | jq
+
+# 3. Tests (deterministic, no API key needed):
+docker compose run --rm backend python -m pytest -q
+
+# 4. Evals (single command; scores the committed snapshot, no API spend):
+docker compose exec backend python eval/run_evals.py
+```
+
+Each step is detailed below ([Run it](#run-it) · [Tests](#tests) · [Evals](#evals)).
+
 ## What it does
 
 `POST /analyze` runs the case documents in `backend/documents/` through a

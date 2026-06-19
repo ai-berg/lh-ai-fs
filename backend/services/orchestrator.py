@@ -107,16 +107,20 @@ def _dedupe_findings(findings: list[Finding]) -> list[Finding]:
     so without dedup a judge would see TWO findings for ONE defect — inflating the
     count, which for a calibrated-counts product is a credibility failure.
 
-    Dedup key: normalized msj_claim + flag_type. The FIRST finding wins (stable order:
-    cross-doc agents run first), and the surviving finding records BOTH agents in
-    `raised_by` so attribution isn't lost. Keyed on the claim+type, NOT the evidence
-    span, because the two agents quote different spans of the same defect (one quotes
-    the altered MSJ text, the other the original source clause).
+    Dedup key: normalized msj_claim ALONE — deliberately NOT flag_type. The two agents
+    are prompted to LABEL the same edit differently (CrossDoc may call it
+    `factual_contradiction` per its prompt; QuoteAccuracy calls it `quote_altered`), so
+    keying on flag_type would let the same defect through twice under different labels —
+    which is exactly the live-run failure mode. The shared signal that it's ONE defect
+    is the MSJ claim under scrutiny, so we collapse on the normalized claim. Nor the
+    evidence span, since the two agents quote different spans (the altered MSJ text vs
+    the original source clause). The FIRST finding wins (stable order: cross-doc runs
+    first); the survivor records BOTH agents in `raised_by` so attribution isn't lost.
     """
-    seen: dict[tuple[str, str], Finding] = {}
-    order: list[tuple[str, str]] = []
+    seen: dict[str, Finding] = {}
+    order: list[str] = []
     for f in findings:
-        key = (normalize(f.msj_claim), str(f.flag_type))
+        key = normalize(f.msj_claim)
         if key in seen:
             prior = seen[key]
             others = {a.strip() for a in prior.raised_by.split("+")}

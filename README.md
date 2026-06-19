@@ -47,9 +47,10 @@ Each flag also carries a **deterministic confidence band** (`services/confidence
 derived from verifiable signals — chiefly how many *distinct* reference documents
 corroborate it — not a number the model self-reports. `HIGH` (three corroborating
 documents) means independent documents agree; the score is reproducible by hand and
-auditable on hover in the UI. On the committed Rivera run the flags land `MEDIUM`
-(one or two corroborating sources) — `HIGH` is reachable but not reached on this
-corpus, reported as-is rather than rounded up (see REFLECTION for the why).
+auditable on hover in the UI. The bands vary run to run with how many sources the
+agent quotes, so read them off the committed artifact rather than this prose:
+`jq '.flags[].confidence.band' backend/tests/fixtures/analyze_snapshot.json` (on the
+snapshot as committed, the incident-date flag reaches `HIGH`; the others are `MEDIUM`).
 
 ## Architecture
 
@@ -177,7 +178,7 @@ generalizes past one fixture — and reports per-case **and aggregate**, honestl
   construction (the report says so), and `--live` runs the pre-gate vs post-gate
   ablation that shows what the gate actually removes from the raw model output.
 
-The metric arithmetic has its own 14 unit tests (`backend/eval/test_metrics.py`) on
+The metric arithmetic has its own dedicated unit tests (`backend/eval/test_metrics.py`) on
 synthetic true-positive / false-positive / miss / hallucination cases, so the
 scoring logic is proven independent of any model output. (These prove the
 *method* is correct, not that the pipeline catches flaws at scale — that rests on

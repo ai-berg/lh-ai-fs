@@ -24,11 +24,13 @@ def _f(claim, flag_type, raised_by, status=VerificationStatus.CONTRADICTED):
     )
 
 
-def test_dedup_collapses_same_defect_from_two_agents():
-    # The CrossDoc/QuoteAccuracy overlap: both flag the SAME quote_altered claim. One
-    # finding survives, attributed to BOTH agents — counted once before the judge.
+def test_dedup_collapses_same_defect_despite_different_flag_types():
+    # The real live-run case: the two agents are prompted to LABEL the same Section 7.2
+    # edit differently — CrossDoc emits factual_contradiction (its prompt forbids
+    # quote_altered), QuoteAccuracy emits quote_altered. Dedup must STILL collapse them
+    # (keyed on the shared msj_claim, not flag_type) and attribute both agents.
     findings = [
-        _f("Section 7.2 quoted without limitation", FlagType.QUOTE_ALTERED, "CrossDocConsistencyAgent"),
+        _f("Section 7.2 quoted without limitation", FlagType.FACTUAL_CONTRADICTION, "CrossDocConsistencyAgent"),
         _f("Section 7.2 quoted without limitation", FlagType.QUOTE_ALTERED, "QuoteAccuracyAgent"),
     ]
     out = _dedupe_findings(findings)

@@ -24,20 +24,23 @@ second model's opinion. (The "4 agents" line in the spec was a trap to satisfy
 honestly: the test isn't a count, it's whether the roles are genuinely distinct —
 so QuoteAccuracy was split *out* of the citation agent rather than bolted on.)
 
-**Honesty enforced in code, not promised in a prompt.** Three independent
-fail-safes: the grounding gate; a Pydantic validator that downgrades any
-`verified`/`contradicted` finding arriving with no evidence; and grounding that
-runs even on `could_not_verify` findings so an abstaining finding can't smuggle
-an unverified quote through. The brief's fictional authorities are **never
-fabricated as `verified`** — the cardinal sin. On the committed run Whitmore is
-reported `could_not_verify`; Kellerman is `contradicted / citation_unsupported`
-(the agent judged, on the brief's own facts, that the cited OSHA-compliance
-proposition doesn't hold because Apex, not Harmon, was the employer). That's an
-*internally-justified* contradiction with a `flag_type`, not a bare unfounded
-ruling — the honesty axis allows it, and the eval's honesty check scopes to exactly
-that distinction. So the honest claim is "never `verified`," not "always
-`could_not_verify`"; a fabricated authority may be `contradicted` when the brief
-internally undermines it.
+**Honesty enforced in code, not promised in a prompt.** Several independent
+fail-safes: the grounding gate; a validator that downgrades any `verified`/
+`contradicted` finding arriving with no evidence; grounding that runs even on
+`could_not_verify` findings so an abstaining finding can't smuggle an unverified
+quote through; and — the honest *ceiling* — a citation validator that downgrades
+**any** `verified` citation to `could_not_verify`, because this pipeline has no
+case-law lookup, so it can never confirm an authority actually supports its
+proposition (a quote merely existing in the brief doesn't prove the cited case says
+it). The brief's fictional authorities are therefore **never fabricated as
+`verified`** — the cardinal sin — even when the model tries: on the committed run the
+citation agent emitted Kellerman as `verified`, and the validator overrode it to
+`could_not_verify`. (Read the current verdicts off the artifact rather than this
+prose: `jq '.citations[] | {authority, support_assessment, flag_type}'
+backend/tests/fixtures/analyze_snapshot.json`.) The honesty axis still *allows* a
+fabricated authority to be `contradicted` when it carries a justifying `flag_type`
+and the brief internally undermines it — an internally-justified ruling, not a bare
+one — but `verified` is never reachable here, by design.
 
 **Field-ordered chain-of-thought.** A `reasoning` field is declared *before* each
 verdict field, because with native structured outputs the model emits keys in
@@ -54,19 +57,22 @@ confidence is **deterministic** (`services/confidence.py`), derived from signals
 pipeline already checks: is the finding assertive or an abstention? how many *distinct*
 reference documents corroborate it? It's reproducible by hand, and `HIGH` is reserved
 for a contradiction corroborated by **three** distinct documents — so the band means
-"independent documents agree," not "the model sounded sure." **Honest note on this
-corpus:** on the committed Rivera snapshot *no flag actually reaches `HIGH`* — the
-incident-date contradiction grounds in a single document (the police report) and so
-lands `MEDIUM (0.55)`, and the PPE/responsibility flags ground in two documents and
-land `MEDIUM (0.75)`. The three-document corroboration the `HIGH` band needs is
-reachable for the date (the medical records and witness statement *do* state March 12),
-but the cross-doc agent only quoted one source per finding on this run, so the band
-stayed `MEDIUM`. That gap — the scorer can only count what the agent chose to cite — is
-itself the honest finding: the band reflects the evidence actually surfaced, not the
-evidence that exists. (An earlier draft of this section wrongly claimed the date flag
-"lands HIGH, three sources"; that was the *unit-test fixture*, not the live run — a
-reminder to quote the snapshot, never the test.) Trade-off: a deterministic score can't
-capture nuance an LLM might (how *semantically* strong a contradiction is) — but for a
+"independent documents agree," not "the model sounded sure." **The band reflects the
+evidence the agent actually surfaced on a given run, which varies** — so rather than
+pin a specific outcome in prose (the snapshot is an n=1 LLM sample and re-capturing it
+moves the bands), read it off the committed artifact: `jq '.flags[].confidence.band'
+backend/tests/fixtures/analyze_snapshot.json`. On the snapshot as committed, the
+incident-date contradiction reaches `HIGH` (0.9) because the cross-doc agent quoted all
+three documents that state March 12 (police report, medical records, witness statement);
+the PPE/responsibility flags cite two documents and land `MEDIUM` (0.75). A *different*
+capture where the agent quotes only one source per finding would leave the date flag at
+`MEDIUM` — and that run-to-run movement is itself the honest point: the band scores the
+evidence *surfaced*, not the evidence that exists, so it's only as strong as what the
+agent chose to cite. (Earlier drafts of this paragraph stated a fixed band both ways and
+drifted out of sync with the re-captured snapshot — the lesson, the same one as the
+precision number above, is to point at the artifact, not transcribe a value that moves.)
+Trade-off: a deterministic score can't capture nuance an LLM might (how *semantically*
+strong a contradiction is) — but for a
 judge, "how corroborated is this, by how many independent documents" is the signal that
 actually supports a decision, and it's one we can defend by hand.
 

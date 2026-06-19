@@ -5,13 +5,6 @@ against the surrounding case file and reports where the brief misstates its
 authorities or contradicts the record — the *epistemic work* of checking
 citations and record cites, returned as structured, source-grounded JSON.
 
-> **Status:** Tiers 1, 2, and 3 are implemented and tested — four distinct agents,
-> a deterministic confidence-scoring layer, a judicial-memo synthesis agent, a
-> single-command eval harness, graceful degradation, and a structured UI (judicial
-> memo + verdict-colored finding/citation cards with confidence bands). The remaining
-> stretch is depth, not coverage: a fuller design system and the future agents named
-> in the [Roadmap](#roadmap).
-
 ## Quickstart (for the reviewer)
 
 Three commands cover everything — run the pipeline, run the tests, run the evals.
@@ -203,22 +196,6 @@ synthetic true-positive / false-positive / miss / hallucination cases, so the
 scoring logic is proven independent of any model output. (These prove the
 *method* is correct, not that the pipeline catches flaws at scale — that rests on
 the planted flaws across the gold set's cases, not on the test count.)
-
-## Roadmap
-
-| Tier | Item | Status |
-|------|------|--------|
-| 1 | Citation extraction + support assessment + quote flags, JSON output | ✅ done |
-| 1 | Grounding / anti-hallucination | ✅ done |
-| 2 | Cross-document consistency | ✅ done |
-| 2 | **Eval harness** (`python run_evals.py`): precision, recall, grounding-consistency + gate ablation | ✅ done |
-| 3 | **4 distinct agents** (Citation, CrossDoc, QuoteAccuracy, JudicialMemo) | ✅ done |
-| 3 | **Deterministic confidence scoring** (band + reasoning per flag) | ✅ done |
-| 3 | **Judicial-memo agent** (LangChain LCEL, one-paragraph bench memo) | ✅ done |
-| 3 | **Graceful degradation** (all agents through `run_agent`: timeout + retry + `degraded_agents`) | ✅ done |
-| 3 | Structured UI (judicial memo + finding/citation cards + confidence bands) | ✅ done |
-| 3 | Fuller design system / future agents (temporal-arithmetic, omission) | ⏳ planned |
-| — | [Reflection document](REFLECTION.md) | ✅ done |
 
 ## Design influences
 

@@ -59,3 +59,42 @@ def test_catches_the_ppe_contradiction(report):
         or "harness" in (f.explanation or "").lower()
     ]
     assert ppe, "expected a PPE contradiction flag in the captured run"
+
+
+# --- Tier-3 deliverables: previously shipped with zero snapshot coverage ---
+
+
+def test_every_flag_carries_a_confidence_band(report):
+    # The deterministic confidence layer must score every flag with a valid band and a
+    # reasoning string — not leave any flag unscored.
+    for f in report.flags:
+        assert f.confidence is not None, f"flag has no confidence: {f.msj_claim}"
+        assert f.confidence.band in ("low", "medium", "high")
+        assert f.confidence.reasoning
+
+
+def test_confidence_band_matches_its_value(report):
+    # The band must be consistent with the numeric value (>=0.8 HIGH, >=0.5 MEDIUM,
+    # else LOW) — pins that the score and its label can't drift apart.
+    for f in report.flags:
+        c = f.confidence
+        expected = "high" if c.value >= 0.8 else "medium" if c.value >= 0.5 else "low"
+        assert c.band == expected, f"band {c.band} != {expected} for value {c.value}"
+
+
+def test_judicial_memo_is_present_and_grounded(report):
+    # The Tier-3 memo must exist on a run with findings, summarize in prose, and tie
+    # back to the findings/citations it was built from (provenance, not free-floating).
+    memo = report.judicial_memo
+    assert memo is not None, "expected a judicial memo on a run with confirmed defects"
+    assert memo.summary.strip()
+    assert memo.grounded_in, "memo must record what it synthesized"
+
+
+def test_judicial_memo_does_not_opine_on_the_merits(report):
+    # Decision support, not displacement: the bench memo must not tell the judge how to
+    # rule. A coarse guard against the most obvious merits language.
+    text = report.judicial_memo.summary.lower()
+    for banned in ("should grant", "should deny", "i recommend", "the court should",
+                   "motion should be granted", "motion should be denied"):
+        assert banned not in text, f"memo opines on the merits: '{banned}'"

@@ -14,7 +14,36 @@ from schemas import (
     FlagType,
     VerificationStatus,
 )
-from services.orchestrator import run_pipeline
+from services.orchestrator import _dedupe_findings, run_pipeline
+
+
+def _f(claim, flag_type, raised_by, status=VerificationStatus.CONTRADICTED):
+    return Finding(
+        flag_type=flag_type, msj_claim=claim, comparison_reasoning="r", status=status,
+        evidence=[EvidenceRef(source_doc="d", quote="q")], explanation="e", raised_by=raised_by,
+    )
+
+
+def test_dedup_collapses_same_defect_from_two_agents():
+    # The CrossDoc/QuoteAccuracy overlap: both flag the SAME quote_altered claim. One
+    # finding survives, attributed to BOTH agents — counted once before the judge.
+    findings = [
+        _f("Section 7.2 quoted without limitation", FlagType.QUOTE_ALTERED, "CrossDocConsistencyAgent"),
+        _f("Section 7.2 quoted without limitation", FlagType.QUOTE_ALTERED, "QuoteAccuracyAgent"),
+    ]
+    out = _dedupe_findings(findings)
+    assert len(out) == 1
+    assert "CrossDocConsistencyAgent" in out[0].raised_by
+    assert "QuoteAccuracyAgent" in out[0].raised_by
+
+
+def test_dedup_keeps_distinct_defects():
+    # Different claims (or different flag types) are NOT the same defect — keep both.
+    findings = [
+        _f("date is wrong", FlagType.CROSS_DOC_INCONSISTENCY, "CrossDocConsistencyAgent"),
+        _f("quantity is wrong", FlagType.CROSS_DOC_INCONSISTENCY, "CrossDocConsistencyAgent"),
+    ]
+    assert len(_dedupe_findings(findings)) == 2
 
 DOCS = {
     "motion_for_summary_judgment": "The incident occurred on March 14, 2021.",
@@ -61,7 +90,7 @@ async def _quote_agent_empty(docs):
     return []
 
 
-async def _memo_noop(findings):
+async def _memo_noop(findings, citations=None):
     # Default fake memo: avoids a real LangChain/LLM call in the orchestrator tests.
     return None
 
@@ -150,7 +179,7 @@ async def test_all_fanout_agents_failing_still_returns_valid_report():
 @pytest.mark.asyncio
 async def test_memo_failure_degrades_gracefully():
     # A memo agent that raises must not sink the report — it's recorded and memo is None.
-    async def _memo_boom(findings):
+    async def _memo_boom(findings, citations=None):
         raise RuntimeError("memo failure")
 
     report = await run_pipeline(

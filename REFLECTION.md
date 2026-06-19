@@ -28,9 +28,16 @@ so QuoteAccuracy was split *out* of the citation agent rather than bolted on.)
 fail-safes: the grounding gate; a Pydantic validator that downgrades any
 `verified`/`contradicted` finding arriving with no evidence; and grounding that
 runs even on `could_not_verify` findings so an abstaining finding can't smuggle
-an unverified quote through. The authors of the brief's fictional authorities
-(Whitmore, Kellerman, …) are reported as `could_not_verify`, never fabricated as
-supported.
+an unverified quote through. The brief's fictional authorities are **never
+fabricated as `verified`** — the cardinal sin. On the committed run Whitmore is
+reported `could_not_verify`; Kellerman is `contradicted / citation_unsupported`
+(the agent judged, on the brief's own facts, that the cited OSHA-compliance
+proposition doesn't hold because Apex, not Harmon, was the employer). That's an
+*internally-justified* contradiction with a `flag_type`, not a bare unfounded
+ruling — the honesty axis allows it, and the eval's honesty check scopes to exactly
+that distinction. So the honest claim is "never `verified`," not "always
+`could_not_verify`"; a fabricated authority may be `contradicted` when the brief
+internally undermines it.
 
 **Field-ordered chain-of-thought.** A `reasoning` field is declared *before* each
 verdict field, because with native structured outputs the model emits keys in
@@ -46,13 +53,22 @@ replace, and it would contradict the honesty posture of the rest of the system. 
 confidence is **deterministic** (`services/confidence.py`), derived from signals the
 pipeline already checks: is the finding assertive or an abstention? how many *distinct*
 reference documents corroborate it? It's reproducible by hand, and `HIGH` is reserved
-for a multi-source-corroborated contradiction — so the band means "independent
-documents agree," not "the model sounded sure." On the live run the incident-date
-contradiction lands `HIGH` (corroborated by the police report, medical records, and
-witness statement); the single- and double-sourced flags land `MEDIUM`. Trade-off: a
-deterministic score can't capture nuance an LLM might (e.g. how *semantically* strong a
-contradiction is) — but for a judge, "how corroborated is this" is the signal that
-actually supports a decision, and it's one we can defend.
+for a contradiction corroborated by **three** distinct documents — so the band means
+"independent documents agree," not "the model sounded sure." **Honest note on this
+corpus:** on the committed Rivera snapshot *no flag actually reaches `HIGH`* — the
+incident-date contradiction grounds in a single document (the police report) and so
+lands `MEDIUM (0.55)`, and the PPE/responsibility flags ground in two documents and
+land `MEDIUM (0.75)`. The three-document corroboration the `HIGH` band needs is
+reachable for the date (the medical records and witness statement *do* state March 12),
+but the cross-doc agent only quoted one source per finding on this run, so the band
+stayed `MEDIUM`. That gap — the scorer can only count what the agent chose to cite — is
+itself the honest finding: the band reflects the evidence actually surfaced, not the
+evidence that exists. (An earlier draft of this section wrongly claimed the date flag
+"lands HIGH, three sources"; that was the *unit-test fixture*, not the live run — a
+reminder to quote the snapshot, never the test.) Trade-off: a deterministic score can't
+capture nuance an LLM might (how *semantically* strong a contradiction is) — but for a
+judge, "how corroborated is this, by how many independent documents" is the signal that
+actually supports a decision, and it's one we can defend by hand.
 
 **LangChain used where it pays — the memo, and only the memo.** The JD lists LangChain
 as a core skill; the assessment penalizes a framework added without need. Both are
@@ -134,8 +150,16 @@ I'd rather state these than have them found:
 
 - **Small denominators.** The gold set now spans two cases (the provided Rivera
   matter plus a synthetic contract case authored to test generalization), 9
-  planted flaws/controls total — aggregate recall **8/9**, precision band
-  **[71%, 83%]** with one false positive. The one honest recall miss is Rivera's
+  planted flaws/controls total — aggregate recall **8/9** (one deliberate
+  expected-miss). I deliberately **do not hard-code the precision number here**: the
+  pipeline scores against a captured snapshot, and re-capturing it (needed so the
+  4th agent appears in the artifact) produces a different n=1 LLM sample each time —
+  the false-positive count has swung between 0 and 1 across captures of the synthetic
+  case. Quoting a single band in prose is exactly how a doc drifts out of sync with
+  its own harness. **Run `python eval/run_evals.py` for the current precision band,
+  TP/FP, and the pending bucket** — that command is the source of truth, the prose is
+  not. (An earlier draft quoted a stale, flattering band; the lesson logged is to
+  point at the command, never transcribe its output.) The one honest recall miss is Rivera's
   intra-document arithmetic slip (the "362 days" off-by-one), planted with
   `expected_to_be_missed` because there is no arithmetic-checking agent — so the
   sub-100% is real, not staged. The one false positive is the synthetic

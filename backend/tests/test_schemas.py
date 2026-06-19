@@ -44,30 +44,34 @@ def test_could_not_verify_without_evidence_is_fine():
     assert f.status == VerificationStatus.COULD_NOT_VERIFY
 
 
-def test_citation_verified_without_quote_is_downgraded():
+def test_any_verified_citation_is_downgraded_no_caselaw_lookup():
     from schemas import Citation
 
-    c = Citation(
-        authority="Whitmore v. Delgado",
-        proposition="A hirer is not liable.",
+    # HONEST CEILING: with no case-law lookup, "verified" is never confirmable, so it
+    # always fails safe to could_not_verify — whether the citation is a direct quote
+    # WITH text (the Kellerman seam the snapshot exposed: a quote existing in the brief
+    # doesn't prove the case says it) or a paraphrase.
+    quoted = Citation(
+        authority="Kellerman v. Pacific Coast Construction",
+        proposition="OSHA compliance creates a presumption of care.",
+        is_direct_quote=True,
+        quoted_text="Where an employer demonstrates full compliance...",
+        assessment_reasoning="r",
+        support_assessment=VerificationStatus.VERIFIED,
+    )
+    paraphrase = Citation(
+        authority="Privette v. Superior Court",
+        proposition="A hirer is presumptively not liable.",
         is_direct_quote=False,
         quoted_text=None,
-        assessment_reasoning="r",
+        assessment_reasoning="The brief states the doctrine accurately.",
         support_assessment=VerificationStatus.VERIFIED,
     )
-    # No quote to stand on -> can't claim verified for an unlookup-able authority.
-    assert c.support_assessment == VerificationStatus.COULD_NOT_VERIFY
+    assert quoted.support_assessment == VerificationStatus.COULD_NOT_VERIFY
+    assert paraphrase.support_assessment == VerificationStatus.COULD_NOT_VERIFY
 
 
-def test_citation_verified_with_a_quote_is_kept():
-    from schemas import Citation
-
-    c = Citation(
-        authority="Whitmore v. Delgado",
-        proposition="A hirer is not liable.",
-        is_direct_quote=True,
-        quoted_text="a hirer is not liable",
-        assessment_reasoning="r",
-        support_assessment=VerificationStatus.VERIFIED,
-    )
-    assert c.support_assessment == VerificationStatus.VERIFIED
+# (removed test_citation_verified_with_a_quote_is_kept: it encoded the pre-honest-
+# ceiling behavior. With no case-law lookup, no citation can be confirmably `verified`,
+# so a quote no longer "keeps" a verified verdict — see
+# test_any_verified_citation_is_downgraded_no_caselaw_lookup above.)

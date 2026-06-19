@@ -26,19 +26,28 @@ You are given the CONFIRMED findings of an automated audit of a Motion for Summa
 Judgment — contradictions and quote/citation defects, each already grounded in the
 record and assigned a confidence band.
 
+You are given two lists: confirmed factual/quote findings (each with a confidence band)
+and citation defects (authorities the audit flagged as overstated, unsupported, or
+misquoted). Either list may be "(none)".
+
 Write a SINGLE concise paragraph (4-6 sentences) for the judge that:
-- States, in plain language, what the audit found wrong with the brief.
+- States, in plain language, what the audit found wrong with the brief — covering BOTH
+  the factual/quote contradictions AND any defective authorities (e.g. a citation that
+  does not support the proposition it is offered for, or an overstated holding).
 - Leads with the highest-confidence, most material findings; mentions lower-confidence
   ones as such ("the audit less confidently flags ...").
-- Is faithful to the findings: do not introduce any defect not in the list, and do not
+- Is faithful to the inputs: do NOT introduce any defect not in the lists, and do not
   overstate certainty beyond the confidence bands given.
 - Does NOT opine on the merits, who should win, or how to rule. You summarize the
   audit's findings to support the judge's own judgment; you do not make it.
 
 Return only the memo paragraph in `summary`."""
 
-_MEMO_HUMAN = """Confirmed findings (claim — flag_type — confidence band — explanation):
-{findings_block}"""
+_MEMO_HUMAN = """Confirmed factual/quote findings (claim — flag_type — confidence band — explanation):
+{findings_block}
+
+Citation defects (authority — flag_type — issue):
+{citations_block}"""
 
 
 def _select(findings: list[Finding]) -> list[Finding]:
@@ -52,12 +61,29 @@ def _select(findings: list[Finding]) -> list[Finding]:
     return confirmed
 
 
+def _select_citations(citations: list) -> list:
+    """Citation defects worth telling a judge about: the ones the citation agent
+    flagged (overstatement, citation_unsupported, quote_altered). A brief that cites a
+    fabricated or misrepresented authority is THE failure this product exists to catch,
+    so the memo must surface it — previously the memo saw only the Finding stream and a
+    citation-only defective brief produced no memo at all."""
+    return [c for c in citations if c.flag_type]
+
+
 def _findings_block(findings: list[Finding]) -> str:
+    if not findings:
+        return "(none)"
     lines = []
     for f in findings:
         band = f.confidence.band if f.confidence else "unscored"
         lines.append(f"- {f.msj_claim} — {f.flag_type} — {band} — {f.explanation}")
     return "\n".join(lines)
+
+
+def _citations_block(citations: list) -> str:
+    if not citations:
+        return "(none)"
+    return "\n".join(f"- {c.authority} — {c.flag_type} — {c.issue or ''}" for c in citations)
 
 
 def _build_chain():
@@ -82,19 +108,27 @@ async def _run_chain(payload: dict) -> JudicialMemo:
     return await chain.ainvoke(payload)
 
 
-async def write_judicial_memo(findings: list[Finding]) -> JudicialMemo | None:
-    """Synthesize the confirmed findings into a one-paragraph memo, or None.
+async def write_judicial_memo(findings: list[Finding], citations: list | None = None) -> JudicialMemo | None:
+    """Synthesize the confirmed findings AND citation defects into one memo, or None.
 
-    Returns None when there is nothing confirmed to report — a judge should get a memo
-    only when the audit actually found defects, never an empty or speculative one.
+    Returns None only when there is nothing confirmed at all — neither a contradicted
+    finding nor a flagged citation. A judge should get a memo whenever the audit found
+    a real defect, including a brief whose ONLY problem is a bad authority.
     """
     selected = _select(findings)
-    if not selected:
-        logger.info("judicial_memo_skipped_no_confirmed_findings")
+    selected_citations = _select_citations(citations or [])
+    if not selected and not selected_citations:
+        logger.info("judicial_memo_skipped_no_confirmed_defects")
         return None
 
-    memo = await _run_chain({"findings_block": _findings_block(selected)})
+    memo = await _run_chain({
+        "findings_block": _findings_block(selected),
+        "citations_block": _citations_block(selected_citations),
+    })
 
-    # Fill grounded_in ourselves from the selected findings rather than trusting the
-    # model to echo them — keeps the memo provably tied to the structured flags.
-    return memo.model_copy(update={"grounded_in": [f.msj_claim for f in selected]})
+    # Fill grounded_in ourselves from the selected items rather than trusting the model
+    # to echo them. NOTE this lists the INPUTS the memo was built from (its provenance),
+    # not a per-sentence citation map — honest scope: "synthesized from these", not
+    # "every clause traces to one of these".
+    grounded = [f.msj_claim for f in selected] + [c.authority for c in selected_citations]
+    return memo.model_copy(update={"grounded_in": grounded})

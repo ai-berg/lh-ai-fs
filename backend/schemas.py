@@ -143,19 +143,23 @@ class Citation(_EnumValueModel):
     )
 
     @model_validator(mode="after")
-    def _no_verified_without_a_quote(self) -> "Citation":
-        # NARROW guard (not the full honesty mechanism — see the honesty axis in the
-        # eval for that): a "verified" support assessment with literally no
-        # quoted_text to stand on is an unfounded claim, so fail safe to
-        # could_not_verify deterministically. NOTE this does NOT catch a fabricated
-        # authority that the model paired with some MSJ-sourced quoted_text — that
-        # case is caught downstream by grounding + the eval's authority-honesty axis,
-        # not here. Assign `.value` (not the enum object): use_enum_values coerces
-        # input at construction but NOT a field reassigned in an after-validator, so
-        # without .value model_dump() would emit the enum on this path and a plain
-        # string everywhere else — a heterogeneous contract that breaks stringifying
-        # consumers only on the downgrade branch.
-        if self.support_assessment == VerificationStatus.VERIFIED and not self.quoted_text:
+    def _no_unverifiable_verified(self) -> "Citation":
+        # HONEST CEILING: this pipeline has NO case-law lookup — it judges citations on
+        # the brief's internal text alone. "verified" means "the authority actually
+        # supports the proposition," which you can only confirm by reading the
+        # authority. Since we can't, a `verified` verdict is never confirmable here, so
+        # we fail it safe to could_not_verify deterministically — abstention is the
+        # honest top outcome, exactly as the prompt instructs ("verified is rare; never
+        # assert it for something you cannot confirm"). This closes the seam the
+        # snapshot exposed: a fabricated authority (Kellerman) was emitted `verified`
+        # with an MSJ-sourced quote — but a quote merely existing in the brief does NOT
+        # prove the cited case says it. (A real production upgrade — eyecite /
+        # CourtListener existence check — is named in REFLECTION as the way to earn a
+        # true `verified`; deliberately out of scope here.) Assign `.value`, not the
+        # enum object: use_enum_values coerces input at construction but NOT a field
+        # reassigned in an after-validator, so without .value model_dump() would emit
+        # the enum here and a plain string elsewhere — a heterogeneous contract.
+        if self.support_assessment == VerificationStatus.VERIFIED:
             self.support_assessment = VerificationStatus.COULD_NOT_VERIFY.value
         return self
 

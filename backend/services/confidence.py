@@ -57,23 +57,33 @@ def score_confidence(finding: Finding) -> ConfidenceScore:
     sources = {ev.source_doc for ev in finding.evidence if ev.source_doc}
     n_sources = len(sources)
 
-    # Base credit for being an assertive, grounded contradiction; each additional
-    # corroborating document adds confidence with diminishing returns (the second
-    # source matters most; the fifth adds little). Capped at 1.0.
+    # Base credit for being an assertive, grounded contradiction, plus a flat +0.20
+    # per additional corroborating document, capped at +0.35 (so the bonus is linear
+    # for the 2nd and 3rd source, then flatlines — a 4th+ document adds nothing).
+    # Concretely: 1 source -> 0.55 (MEDIUM), 2 -> 0.75 (MEDIUM), 3+ -> 0.90 (HIGH).
+    # HIGH therefore requires THREE distinct corroborating documents, by design.
     base = 0.55                       # one grounded assertive source clears MEDIUM
     corroboration_bonus = min(0.35, 0.20 * (n_sources - 1)) if n_sources > 1 else 0.0
     value = round(min(1.0, base + corroboration_bonus), 2)
 
     band = _band(value)
+    # Word the reasoning to match the BAND actually reached — only HIGH (>=3 distinct
+    # documents) earns the "strongest signal / independent documents agree" language;
+    # a 2-source MEDIUM is "partially corroborated", not the top signal.
+    if band == ConfidenceBand.HIGH:
+        corroboration_note = (
+            f" — corroborated across {n_sources} independent documents (the strongest"
+            " deterministic signal of a real contradiction)."
+        )
+    elif n_sources > 1:
+        corroboration_note = (
+            f" — partially corroborated ({n_sources} documents); HIGH needs three."
+        )
+    else:
+        corroboration_note = " — single-source; confidence is moderate pending corroboration."
     reasoning = (
         f"Assertive {finding.status} flag grounded in {n_sources} "
-        f"{'source' if n_sources == 1 else 'sources'}"
-        + (
-            f" — corroborated across {n_sources} independent documents, the strongest"
-            " deterministic signal of a real contradiction."
-            if n_sources > 1
-            else " — single-source, so confidence is moderate pending corroboration."
-        )
+        f"{'source' if n_sources == 1 else 'sources'}" + corroboration_note
     )
     return ConfidenceScore(
         value=value,

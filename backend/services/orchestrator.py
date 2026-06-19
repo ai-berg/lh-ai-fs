@@ -15,7 +15,7 @@ from repositories.document_repository import MSJ_DOC
 from schemas import Citation, Finding, VerificationReport
 from services.agents.base import run_agent
 from services.confidence import score_confidence
-from services.grounding import ground_citation_quotes, validate_grounding
+from services.grounding import ground_citation_quotes, normalize, validate_grounding
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +97,37 @@ def apply_grounding(
     return citations, grounded
 
 
+def _dedupe_findings(findings: list[Finding]) -> list[Finding]:
+    """Collapse co-located findings that two agents raised about the SAME defect.
+
+    WHY this is needed: CrossDoc and QuoteAccuracy genuinely overlap on the highest-
+    value case — a quotation edited to drop a limiting clause is *both* an unfaithful
+    quote (QuoteAccuracy's lane) *and* the factual conflict that creates (CrossDoc's
+    lane). On the committed synthetic run both agents flag the same Section 7.2 edit,
+    so without dedup a judge would see TWO findings for ONE defect — inflating the
+    count, which for a calibrated-counts product is a credibility failure.
+
+    Dedup key: normalized msj_claim + flag_type. The FIRST finding wins (stable order:
+    cross-doc agents run first), and the surviving finding records BOTH agents in
+    `raised_by` so attribution isn't lost. Keyed on the claim+type, NOT the evidence
+    span, because the two agents quote different spans of the same defect (one quotes
+    the altered MSJ text, the other the original source clause).
+    """
+    seen: dict[tuple[str, str], Finding] = {}
+    order: list[tuple[str, str]] = []
+    for f in findings:
+        key = (normalize(f.msj_claim), str(f.flag_type))
+        if key in seen:
+            prior = seen[key]
+            others = {a.strip() for a in prior.raised_by.split("+")}
+            if f.raised_by and f.raised_by not in others:
+                seen[key] = prior.model_copy(update={"raised_by": f"{prior.raised_by}+{f.raised_by}"})
+            continue
+        seen[key] = f
+        order.append(key)
+    return [seen[k] for k in order]
+
+
 async def run_pipeline(
     docs: dict[str, str],
     *,
@@ -120,16 +151,22 @@ async def run_pipeline(
     )
     citations, grounded = apply_grounding(citations, findings, docs)
 
+    # Dedup BEFORE scoring/memo: collapse the same defect raised by two agents (the
+    # CrossDoc/QuoteAccuracy overlap on meaning-altering quote edits) so it is counted,
+    # scored, and reported to the judge ONCE, with both agents attributed.
+    deduped = _dedupe_findings(grounded)
+
     # Confidence is scored AFTER grounding, on purpose: a finding the gate downgraded to
     # could_not_verify must score as a low-confidence non-claim, so confidence reflects
     # the GROUNDED truth, not the model's raw assertion. Deterministic — no LLM here.
-    scored = [f.model_copy(update={"confidence": score_confidence(f)}) for f in grounded]
+    scored = [f.model_copy(update={"confidence": score_confidence(f)}) for f in deduped]
 
-    # The memo synthesizes the confirmed, scored findings into one paragraph for a judge.
-    # It runs LAST (it consumes the others' output) and degrades gracefully: a memo
-    # failure records the agent but never sinks the report — the structured flags remain
-    # the source of truth.
-    memo = await _run_memo(scored, degraded, memo_agent)
+    # The memo synthesizes the confirmed findings AND flagged citations into one
+    # paragraph for a judge. It runs LAST (it consumes the others' output) and degrades
+    # gracefully: a memo failure records the agent but never sinks the report — the
+    # structured flags remain the source of truth. Passing citations matters: a brief
+    # whose only defect is a bad authority must still produce a memo for the judge.
+    memo = await _run_memo(scored, citations, degraded, memo_agent)
 
     expected_min = _expected_min_citations()
     if "CitationAuditAgent" not in degraded and len(citations) < expected_min:
@@ -143,7 +180,7 @@ async def run_pipeline(
     )
 
 
-async def _run_memo(findings, degraded, memo_agent):
+async def _run_memo(findings, citations, degraded, memo_agent):
     """Run the memo agent under the SAME resilience contract as the fan-out agents.
 
     Routed through ``run_agent`` so the memo gets the identical timeout + one-retry +
@@ -157,5 +194,5 @@ async def _run_memo(findings, degraded, memo_agent):
 
         memo_agent = write_judicial_memo
     return await run_agent(
-        "JudicialMemoAgent", lambda: memo_agent(findings), fallback=None, degraded=degraded
+        "JudicialMemoAgent", lambda: memo_agent(findings, citations), fallback=None, degraded=degraded
     )

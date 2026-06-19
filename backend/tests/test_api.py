@@ -80,3 +80,19 @@ def test_enums_serialize_as_plain_strings(client):
     assert body["citations"][0]["support_assessment"] == "could_not_verify"
     assert body["citations"][0]["flag_type"] == "overstatement"
     assert body["flags"][0]["status"] == "contradicted"
+
+
+def test_empty_corpus_returns_422_not_500(monkeypatch):
+    # The route maps EmptyCorpusError -> 422 (bad input), not a 500. Without this test
+    # the whole error handler could be deleted and the suite would stay green.
+    import main
+    from services.orchestrator import EmptyCorpusError
+
+    async def boom(docs):
+        raise EmptyCorpusError("no MSJ found")
+
+    monkeypatch.setattr(main, "run_pipeline", boom)
+    response = TestClient(main.app).post("/analyze")
+
+    assert response.status_code == 422
+    assert "MSJ" in response.json()["detail"]

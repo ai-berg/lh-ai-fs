@@ -45,8 +45,11 @@ uncertainty.
 
 Each flag also carries a **deterministic confidence band** (`services/confidence.py`)
 derived from verifiable signals — chiefly how many *distinct* reference documents
-corroborate it — not a number the model self-reports. `HIGH` means independent
-documents agree; the score is reproducible by hand and auditable on hover in the UI.
+corroborate it — not a number the model self-reports. `HIGH` (three corroborating
+documents) means independent documents agree; the score is reproducible by hand and
+auditable on hover in the UI. On the committed Rivera run the flags land `MEDIUM`
+(one or two corroborating sources) — `HIGH` is reachable but not reached on this
+corpus, reported as-is rather than rounded up (see REFLECTION for the why).
 
 ## Architecture
 
@@ -156,10 +159,13 @@ generalizes past one fixture — and reports per-case **and aggregate**, honestl
 - **Precision** — false flags landing on labeled *negatives* (true MSJ statements
   that must not be flagged); without negatives precision is meaningless, so each
   gold set ships hard negatives the model is tempted to flag but must not. The
-  synthetic case's hard negative actually trips the pipeline — a true contract
-  deadline it over-flags as contradicted by a later schedule revision — so the
-  harness honestly reports **FP=1** (band `[71%, 83%]` aggregate) rather than hiding
-  the spurious flag. Plausible-but-unplanted findings go to a `pending_adjudication`
+  synthetic case ships a hard negative (a true contract deadline a zealous pipeline
+  over-flags as contradicted by a later schedule revision) — and across snapshot
+  captures the pipeline has both tripped it (FP=1) and avoided it (FP=0), reported
+  as-is either way. The exact precision band, TP/FP, and pending count vary with the
+  captured run (it's an n=1 LLM sample), so **the numbers live in `run_evals.py`, not
+  in this prose** — run it for the current figures rather than trusting a transcribed
+  band that drifts. Plausible-but-unplanted findings go to a `pending_adjudication`
   bucket — scored neither right nor wrong, so the number isn't gamed in either
   direction. **Scope:** precision is measured over the cross-doc *flag* stream; the
   citation-support stream has no labeled "citation that must not be flagged" set, so

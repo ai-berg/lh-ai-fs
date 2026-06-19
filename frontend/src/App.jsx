@@ -84,6 +84,20 @@ function FlagCard({ flag }) {
           ))}
         </div>
       )}
+      {/* The chain-of-thought the backend engineers to run BEFORE the verdict — the
+          "traceable reasoning" the product sells. Shown in the UI (not just Raw JSON)
+          so a reviewer can see WHY, collapsed by default to keep the card scannable. */}
+      {flag.comparison_reasoning && (
+        <details style={{ marginTop: '6px', fontSize: '12px', color: '#555' }}>
+          <summary style={{ cursor: 'pointer' }}>Reasoning</summary>
+          <div style={{ marginTop: '4px' }}>{flag.comparison_reasoning}</div>
+        </details>
+      )}
+      {flag.raised_by && (
+        <div style={{ fontSize: '11px', color: '#999', marginTop: '6px' }}>
+          raised by {flag.raised_by}
+        </div>
+      )}
     </Card>
   )
 }
@@ -111,6 +125,13 @@ function CitationCard({ cite }) {
       )}
       {cite.issue && (
         <div style={{ fontSize: '13px', color: '#b7791f', marginTop: '4px' }}>{cite.issue}</div>
+      )}
+      {/* Same reasoning-before-verdict transparency as the finding cards. */}
+      {cite.assessment_reasoning && (
+        <details style={{ marginTop: '6px', fontSize: '12px', color: '#555' }}>
+          <summary style={{ cursor: 'pointer' }}>Reasoning</summary>
+          <div style={{ marginTop: '4px' }}>{cite.assessment_reasoning}</div>
+        </details>
       )}
     </Card>
   )

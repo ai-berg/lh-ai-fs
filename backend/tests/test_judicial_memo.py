@@ -52,6 +52,34 @@ async def test_no_findings_returns_no_memo(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_citation_only_defect_still_produces_a_memo(monkeypatch):
+    # A brief whose ONLY defect is a bad authority (no factual findings) must STILL
+    # get a memo — that's the failure Learned Hand's product exists to catch.
+    from schemas import Citation
+
+    captured = {}
+
+    async def fake_chain(payload):
+        captured.update(payload)
+        return JudicialMemo(summary="The brief cites an unsupported authority.")
+
+    monkeypatch.setattr(judicial_memo, "_run_chain", fake_chain)
+
+    bad_citation = Citation(
+        authority="Kellerman v. Pacific Coast Construction",
+        proposition="OSHA compliance creates a presumption of care.",
+        is_direct_quote=True, quoted_text="...", assessment_reasoning="r",
+        support_assessment="contradicted", flag_type="citation_unsupported",
+        issue="Apex, not Harmon, was the employer.",
+    )
+    memo = await judicial_memo.write_judicial_memo([], [bad_citation])
+
+    assert memo is not None
+    assert "Kellerman" in captured["citations_block"]
+    assert "Kellerman v. Pacific Coast Construction" in memo.grounded_in
+
+
+@pytest.mark.asyncio
 async def test_abstentions_alone_produce_no_memo(monkeypatch):
     # A memo summarizes CONFIRMED problems; if everything is could_not_verify there is
     # nothing to report to the judge.

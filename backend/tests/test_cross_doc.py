@@ -8,7 +8,7 @@ reference blob — without spending tokens.
 import pytest
 
 import services.agents.cross_doc as cross_doc
-from schemas import CrossDocOutput, EvidenceRef, Finding, FlagType, VerificationStatus
+from schemas import CrossDocOutput, EvidenceRef, FindingDraft, FlagType, VerificationStatus
 
 DOCS = {
     "motion_for_summary_judgment": "Incident on March 14, 2021.",
@@ -17,28 +17,31 @@ DOCS = {
 }
 
 
-def _finding(raised_by):
-    return Finding(
+def _draft():
+    # The agent emits a FindingDraft (no raised_by/confidence — stamped/scored when the
+    # agent promotes it to a Finding).
+    return FindingDraft(
         flag_type=FlagType.CROSS_DOC_INCONSISTENCY,
         msj_claim="Incident on March 14, 2021.",
         comparison_reasoning="MSJ says 14, refs say 12.",
         status=VerificationStatus.CONTRADICTED,
         evidence=[EvidenceRef(source_doc="police_report", quote="March 12, 2021")],
         explanation="Date conflict.",
-        raised_by=raised_by,
     )
 
 
 @pytest.mark.asyncio
-async def test_stamps_provenance_even_when_model_leaves_it_blank(monkeypatch):
+async def test_promotes_draft_and_stamps_provenance(monkeypatch):
     async def fake_call(messages, schema, **kwargs):
-        return CrossDocOutput(findings=[_finding(raised_by="")])
+        return CrossDocOutput(findings=[_draft()])
 
     monkeypatch.setattr(cross_doc, "call_llm_structured", fake_call)
 
     findings = await cross_doc.check_cross_doc_consistency(DOCS)
 
+    # The promoted Finding carries the agent's provenance and no confidence yet.
     assert findings[0].raised_by == cross_doc.AGENT_NAME
+    assert findings[0].confidence is None
 
 
 @pytest.mark.asyncio

@@ -71,7 +71,10 @@ async def call_llm_structured(
     caller degrades the agent explicitly rather than dereferencing a ``None``
     ``.parsed`` (which the ``-> T`` annotation would otherwise quietly violate).
     """
-    response = await _async_client().beta.chat.completions.parse(
+    # `chat.completions.parse` (not the older `.beta.chat.completions.parse`): on the
+    # openai 2.x SDK structured-output parsing graduated out of `.beta`. The beta alias
+    # still resolves today, but the un-prefixed path is the current, stable surface.
+    response = await _async_client().chat.completions.parse(
         model=model,
         messages=messages,
         response_format=schema,

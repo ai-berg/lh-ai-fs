@@ -43,13 +43,19 @@ flaws:
       The MSJ dates delivery March 15, 2023; the invoice says March 8, 2023.
 
   - id: altered_clause_quote
-    scoring_axis: cross_doc      # surfaces as a cross-doc Finding (quote_altered)
+    scoring_axis: cross_doc      # scored on the flag stream by expected_flag_type
     severity: high
     objective: true
-    # The pipeline surfaces this as a cross-doc Finding with flag_type
-    # quote_altered (the MSJ quotes Section 7.2 ending "...without limitation",
-    # but the actual clause caps damages), not as a citation — so it is scored on
-    # the flag stream with the expected flag_type, not the citation stream.
+    # This is the QuoteAccuracyAgent's signature defect: the MSJ quotes Section 7.2
+    # ending "...without limitation", but the actual clause caps damages. On the
+    # committed live snapshot the QuoteAccuracyAgent DOES raise it (raised_by=
+    # QuoteAccuracyAgent, flag_type=quote_altered) — this is where the 4th agent earns
+    # its place. The CrossDocConsistencyAgent ALSO flags the same edit (a quote that
+    # drops a limiting clause is also a factual conflict), so the run shows both agents
+    # firing on it — a real, documented overlap on the meaning-altering-quote case (the
+    # orchestrator dedups co-located findings; see services/orchestrator.py). The flaw
+    # is matched on the flag stream by flag_type, so whichever agent's finding survives
+    # dedup gets the credit.
     where: cross_doc
     expected_flag_type: quote_altered
     msj_claim_contains: "without limitation"

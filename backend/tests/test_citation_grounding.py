@@ -16,7 +16,10 @@ MSJ = (
 )
 
 
-def _citation(quoted_text, support=VerificationStatus.VERIFIED):
+# Default support is contradicted (a real assertive verdict that survives the schema's
+# "no confirmable verified" ceiling) so these tests isolate ground_citation_quotes'
+# own behavior — whether the QUOTE is present in the MSJ — not the verified-downgrade.
+def _citation(quoted_text, support=VerificationStatus.CONTRADICTED):
     return Citation(
         authority="Privette v. Superior Court",
         proposition="A hirer is never liable.",
@@ -28,9 +31,11 @@ def _citation(quoted_text, support=VerificationStatus.VERIFIED):
 
 
 def test_quote_present_in_msj_is_left_alone():
+    # A quote that IS in the MSJ: the grounding pass must not touch the support verdict
+    # (it only withdraws confidence when the quote is ABSENT).
     c = _citation("a hirer is generally not liable")
     [result] = ground_citation_quotes([c], MSJ)
-    assert result.support_assessment == VerificationStatus.VERIFIED  # unchanged
+    assert result.support_assessment == VerificationStatus.CONTRADICTED  # unchanged
     assert result.flag_type is None
 
 

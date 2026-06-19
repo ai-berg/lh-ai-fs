@@ -38,6 +38,20 @@ class VerificationStatus(str, Enum):
     COULD_NOT_VERIFY = "could_not_verify"
 
 
+class ConfidenceBand(str, Enum):
+    """Coarse confidence bucket for a flag.
+
+    Bands (not just a raw float) because a judge reading the report needs a legible
+    signal, and because our confidence is DETERMINISTIC — derived from verifiable
+    signals, not a number the model invents — so a small set of bands is both honest
+    about the granularity we can actually justify and easy to act on.
+    """
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
 class _EnumValueModel(BaseModel):
     """Base that serializes enum fields as their string values.
 
@@ -48,6 +62,26 @@ class _EnumValueModel(BaseModel):
     """
 
     model_config = ConfigDict(use_enum_values=True)
+
+
+class ConfidenceScore(_EnumValueModel):
+    """How certain the pipeline is about a flag, with the reasoning behind it.
+
+    DETERMINISTIC by design: `value`/`band` are computed from verifiable signals on
+    the grounded finding (is it asserted or abstained? how many *distinct* reference
+    documents corroborate it?), never self-reported by the model. `reasoning` is
+    generated FROM those signals, so the number is auditable — you can reconstruct it
+    by hand. This is the "traceable reasoning" the product is built on; a model-
+    invented 0.87 would be exactly the unverifiable number it sets out to replace.
+    """
+
+    value: float = Field(..., ge=0.0, le=1.0, description="Calibrated confidence in [0,1].")
+    band: ConfidenceBand
+    reasoning: str = Field(..., description="Why this score, stated from the signals.")
+    signals: dict = Field(
+        default_factory=dict,
+        description="The raw signals that produced the score, for auditability.",
+    )
 
 
 class EvidenceRef(BaseModel):
@@ -109,19 +143,23 @@ class Citation(_EnumValueModel):
     )
 
     @model_validator(mode="after")
-    def _no_verified_without_a_quote(self) -> "Citation":
-        # NARROW guard (not the full honesty mechanism — see the honesty axis in the
-        # eval for that): a "verified" support assessment with literally no
-        # quoted_text to stand on is an unfounded claim, so fail safe to
-        # could_not_verify deterministically. NOTE this does NOT catch a fabricated
-        # authority that the model paired with some MSJ-sourced quoted_text — that
-        # case is caught downstream by grounding + the eval's authority-honesty axis,
-        # not here. Assign `.value` (not the enum object): use_enum_values coerces
-        # input at construction but NOT a field reassigned in an after-validator, so
-        # without .value model_dump() would emit the enum on this path and a plain
-        # string everywhere else — a heterogeneous contract that breaks stringifying
-        # consumers only on the downgrade branch.
-        if self.support_assessment == VerificationStatus.VERIFIED and not self.quoted_text:
+    def _no_unverifiable_verified(self) -> "Citation":
+        # HONEST CEILING: this pipeline has NO case-law lookup — it judges citations on
+        # the brief's internal text alone. "verified" means "the authority actually
+        # supports the proposition," which you can only confirm by reading the
+        # authority. Since we can't, a `verified` verdict is never confirmable here, so
+        # we fail it safe to could_not_verify deterministically — abstention is the
+        # honest top outcome, exactly as the prompt instructs ("verified is rare; never
+        # assert it for something you cannot confirm"). This closes the seam the
+        # snapshot exposed: a fabricated authority (Kellerman) was emitted `verified`
+        # with an MSJ-sourced quote — but a quote merely existing in the brief does NOT
+        # prove the cited case says it. (A real production upgrade — eyecite /
+        # CourtListener existence check — is named in REFLECTION as the way to earn a
+        # true `verified`; deliberately out of scope here.) Assign `.value`, not the
+        # enum object: use_enum_values coerces input at construction but NOT a field
+        # reassigned in an after-validator, so without .value model_dump() would emit
+        # the enum here and a plain string elsewhere — a heterogeneous contract.
+        if self.support_assessment == VerificationStatus.VERIFIED:
             self.support_assessment = VerificationStatus.COULD_NOT_VERIFY.value
         return self
 
@@ -158,6 +196,13 @@ class Finding(_EnumValueModel):
     # required regardless of a Python default, so the model still emits it — the
     # default just gives a clean value when a Finding is built in code/tests.)
     raised_by: str = Field(default="", description="Agent that produced this finding.")
+    # Assigned by the orchestrator AFTER grounding, never by the agent: confidence is
+    # deterministic (services.confidence) so the model must not self-report it. None
+    # until scored. Excluded from the agents' structured-output schema for the same
+    # reason — see how the agents build their response model.
+    confidence: "ConfidenceScore | None" = Field(
+        default=None, description="Deterministic post-grounding confidence; set by the orchestrator."
+    )
 
     @model_validator(mode="after")
     def _require_evidence_for_assertions(self) -> "Finding":
@@ -174,6 +219,45 @@ class Finding(_EnumValueModel):
         return self
 
 
+class FindingDraft(_EnumValueModel):
+    """What an agent EMITS — a Finding without the orchestration-only fields.
+
+    Critically excludes ``confidence``: that is deterministic and assigned post-gate by
+    the orchestrator, never self-reported by the model. It MUST also stay out of the
+    agent's structured-output schema for a hard technical reason: OpenAI structured
+    outputs reject an open ``dict`` field (it demands additionalProperties=false), and
+    ConfidenceScore.signals is exactly such a dict — so embedding confidence in the
+    emitted schema makes the whole response_format invalid (a 400 from the API). The
+    orchestrator promotes each draft into a full ``Finding`` (see _to_finding) before
+    grounding and scoring. Same field order as Finding (reasoning before verdict).
+    """
+
+    msj_claim: str = Field(..., description="The assertion in the MSJ under scrutiny.")
+    comparison_reasoning: str = Field(
+        ...,
+        description="Brief analysis BEFORE the verdict: the MSJ fact, what the "
+        "reference documents say about it, and whether they conflict.",
+    )
+    status: VerificationStatus
+    flag_type: FlagType = Field(
+        ..., description="Category of the issue — a CONCLUSION drawn after the reasoning.",
+    )
+    evidence: list[EvidenceRef] = Field(default_factory=list)
+    explanation: str
+
+    def to_finding(self, raised_by: str) -> "Finding":
+        """Promote an emitted draft to a full Finding (provenance stamped, unscored)."""
+        return Finding(
+            msj_claim=self.msj_claim,
+            comparison_reasoning=self.comparison_reasoning,
+            status=self.status,
+            flag_type=self.flag_type,
+            evidence=self.evidence,
+            explanation=self.explanation,
+            raised_by=raised_by,
+        )
+
+
 class CitationAuditOutput(BaseModel):
     """Wrapper returned by the citation agent (structured outputs need a root object)."""
 
@@ -181,9 +265,37 @@ class CitationAuditOutput(BaseModel):
 
 
 class CrossDocOutput(BaseModel):
-    """Wrapper returned by the cross-document consistency agent."""
+    """Wrapper the cross-document consistency agent EMITS (drafts, no confidence)."""
 
-    findings: list[Finding] = Field(default_factory=list)
+    findings: list[FindingDraft] = Field(default_factory=list)
+
+
+class QuoteAccuracyOutput(BaseModel):
+    """Wrapper the quote-accuracy agent EMITS (drafts, no confidence).
+
+    Reuses ``FindingDraft`` (with flag_type=quote_altered) so quote-accuracy flaws flow
+    through the SAME grounding gate, confidence scoring, and report shape as cross-doc
+    findings — one finding contract, not a parallel type per agent.
+    """
+
+    findings: list[FindingDraft] = Field(default_factory=list)
+
+
+class JudicialMemo(_EnumValueModel):
+    """A one-paragraph synthesis of the top findings, written for a judge.
+
+    Decision SUPPORT, not displacement: the memo summarizes what the audit found and
+    how certain it is, and explicitly does NOT opine on the merits or how to rule —
+    mirroring a bench-memo's role and the product's "help judges focus on judgment"
+    framing. `grounded_in` lists the finding claims it drew from, so the prose stays
+    traceable to the structured flags rather than free-floating.
+    """
+
+    summary: str = Field(..., description="One paragraph for the judge: what the audit found and how sure.")
+    grounded_in: list[str] = Field(
+        default_factory=list,
+        description="The msj_claims of the findings this memo synthesizes, for traceability.",
+    )
 
 
 class VerificationReport(BaseModel):
@@ -191,8 +303,11 @@ class VerificationReport(BaseModel):
 
     ``degraded_agents`` records agents that failed gracefully so the report is
     transparent about partial coverage instead of silently dropping work.
+    ``judicial_memo`` is None when no findings warranted a synthesis or the memo
+    agent degraded — the structured flags remain the source of truth either way.
     """
 
     citations: list[Citation] = Field(default_factory=list)
     flags: list[Finding] = Field(default_factory=list)
+    judicial_memo: JudicialMemo | None = Field(default=None)
     degraded_agents: list[str] = Field(default_factory=list)

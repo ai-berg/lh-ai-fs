@@ -1,151 +1,114 @@
 # Reflection — BS Detector
 
-A short, honest account of the design decisions, the trade-offs behind them, and
-what I'd do with more time. The theme: **the pipeline's one job is to be
-trustworthy, so I spent the budget on making it abstain rather than guess, and on
-an eval that reports its own limits instead of a flattering number.**
+The pipeline's one job is to be trustworthy, so I spent the budget on making it
+**abstain rather than guess**, and on an eval that **reports its own limits** instead
+of a flattering number.
 
-## What I built and why
+## Agent decomposition
 
-**Two LLM agents + a deterministic grounding gate, not N agents.**
-`CitationAuditAgent` reasons about authorities within the MSJ alone;
-`CrossDocConsistencyAgent` contrasts MSJ facts against the reference bundle. They
-fan out in parallel and neither consumes the other's output, so there is no
-error-amplification path between them. I deliberately did **not** add a critique
-agent or a debate loop: self-critique is unreliable without an external signal,
-so I replaced it with a deterministic verifier (`grounding.py`) that checks every
-cited quote verbatim against its source and downgrades anything it can't confirm
-to `could_not_verify`. For an auditability-driven legal tool, a check you can
-reproduce by hand beats a second model's opinion.
+Four agents with deliberately disjoint roles — **meaning vs. facts vs. words vs.
+synthesis**:
 
-**Honesty enforced in code, not promised in a prompt.** Three independent
-fail-safes: the grounding gate; a Pydantic validator that downgrades any
-`verified`/`contradicted` finding arriving with no evidence; and grounding that
-runs even on `could_not_verify` findings so an abstaining finding can't smuggle
-an unverified quote through. The authors of the brief's fictional authorities
-(Whitmore, Kellerman, …) are reported as `could_not_verify`, never fabricated as
-supported.
+- `CitationAuditAgent` — does an authority *support* its proposition? (legal-merits)
+- `CrossDocConsistencyAgent` — does an MSJ fact *agree* with the record? (fact-vs-fact)
+- `QuoteAccuracyAgent` — is a quotation *faithful* to its source? (textual fidelity)
+- `JudicialMemoAgent` — synthesizes the confirmed findings into one paragraph
 
-**Field-ordered chain-of-thought.** A `reasoning` field is declared *before* each
-verdict field, because with native structured outputs the model emits keys in
-field order — so reasoning-first is the only way the chain-of-thought actually
-runs before the verdict rather than rationalizing it after.
+The first three fan out in parallel and none consumes another's output, so there is
+no error-amplification path between them. I deliberately did **not** add a critique
+or debate agent: self-critique is unreliable without an external signal, so I
+replaced it with a deterministic verifier (`grounding.py`) that checks every cited
+quote verbatim against its source and downgrades anything it can't confirm to
+`could_not_verify`. For an auditability-driven legal tool, a check you can reproduce
+by hand beats a second model's opinion. I split QuoteAccuracy *out* of the citation
+agent — quote fidelity and legal support are different judgments — rather than adding
+a fourth role for its own sake.
 
-## The eval, and why it's built to report bad news
+## Honesty enforced in code, not promised in a prompt
 
-A note on where this came from: the *grounding primitive* the eval reuses to
-detect ungrounded quotes is the same literal-source-citation check carried over
-from prior production experience on a legal-domain LLM/RAG assistant. The *eval
-methodology* itself — blind-frozen gold set, labeled negatives, the
-pending-adjudication bucket, Wilson CIs, the pre/post-gate ablation — is from
-grounded-generation research (FActScore, SAFE, RAGAS, the Stanford RegLab legal-
-hallucination audits), not from that prior system, which had no output-quality
-eval of this kind. So Tier 2 is the part that is genuinely new rather than
-carried over.
+- The **grounding gate** rejects any quote not literally present in its source.
+- A validator downgrades any `verified`/`contradicted` finding that arrives with **no
+  evidence**.
+- The **honest ceiling**: with no case-law lookup, the pipeline can never confirm an
+  authority actually supports its proposition, so a citation validator downgrades
+  **any** `verified` citation to `could_not_verify` (a quote existing in the brief
+  doesn't prove the cited case says it). Fictional authorities are therefore never
+  fabricated as `verified` — even when the model tries.
 
-An eval is easy to make lie. I tried to defend against the standard ways:
+**Field-ordered chain-of-thought:** a `reasoning` field is declared *before* each
+verdict field, because structured outputs emit keys in declaration order — so
+reasoning-first is the only way the analysis runs before the verdict, not after it.
 
-- **Gold set labeled from the source documents** (`backend/eval/gold_set.yaml`), every
-  `proof_span` hand-checkable against the corpus. I labeled the flaws from the
-  documents rather than from pipeline output (the easiest way for an eval to lie
-  is to grade against what the system already catches) — but in fairness this is
-  an *attestation*, not a git-provable blind freeze: the gold-set file was
-  committed after the first snapshot, so trust the verbatim `proof_span`s, not my
-  word on ordering.
-- **Labeled negatives** (true MSJ statements that must not be flagged) so
-  precision is computable at all — without them a "100% precision" headline is
-  meaningless.
+## Confidence is computed, not confessed
+
+A model-emitted `confidence: 0.87` is exactly the unverifiable number this tool
+exists to replace. So confidence is **deterministic** (`services/confidence.py`):
+derived from how many *distinct* documents corroborate a finding and whether it's
+assertive or an abstention. It's reproducible by hand; `HIGH` requires three
+corroborating documents. The band reflects the evidence the agent *surfaced* on a run
+(which varies), so read it off the artifact, not this prose:
+`jq '.flags[].confidence.band' backend/tests/fixtures/analyze_snapshot.json`.
+Trade-off: a deterministic score can't capture how *semantically* strong a
+contradiction is — but "how corroborated is this, by how many independent documents"
+is the signal that supports a judge's decision and that I can defend by hand.
+
+## LangChain where it pays — the memo only
+
+The fan-out agents are independent parallel calls with no chaining, retrieval, or
+tool loop, so a framework there is pure overhead and would hide the decomposition.
+The judicial memo is a single synthesis step (`prompt | llm | structured_output`) —
+the canonical LCEL use case — so it's built on LangChain and the other three stay on
+the OpenAI SDK directly. The memo is **decision support, not displacement**: it
+summarizes confirmed findings and flagged citations, leads with the
+highest-confidence ones, and never opines on the merits; `grounded_in` ties it back
+to the structured flags.
+
+## The eval, built to report bad news
+
+The grounding primitive is carried over from prior production work on a legal-domain
+RAG assistant; the eval *methodology* (labeled negatives, pending-adjudication
+bucket, Wilson CIs, pre/post-gate ablation) is from grounded-generation research
+(FActScore, SAFE, RAGAS, Stanford RegLab) — so Tier 2 is genuinely new, not carried
+over. Defenses against an eval that lies:
+
+- **Gold labeled from the source documents**, every `proof_span` hand-checkable —
+  not from pipeline output (the easiest way to grade against what you already catch).
+- **Labeled negatives** so precision is computable at all; a hard negative that
+  actually trips the pipeline is reported as a false positive, not hidden.
 - **A `pending_adjudication` bucket** for plausible-but-unplanted findings, scored
-  neither right nor wrong, so the number isn't gamed in either direction. The run
-  actually produces one: the model's (correct) "Apex, not Harmon, controlled
-  scaffolding" observation lands there instead of inflating precision.
-- **A deliberately-planted flaw the pipeline misses** — the brief's "one year and
-  362 days" arithmetic slip (it's ~361). There is no arithmetic-checking agent,
-  so recall honestly reports a sub-100%, not a staged perfect score. An honest miss says more
-  than a cherry-picked 100%.
-- **Metric arithmetic is unit-tested independent of any model**
-  (`backend/eval/test_metrics.py`): a perturbation that empties the findings drops recall,
-  a flag on a negative raises FP, an ungrounded quote raises hallucination — the
-  numbers genuinely move.
+  neither right nor wrong.
+- **A deliberately-planted flaw the pipeline misses** (the "362 days" arithmetic
+  slip — there's no arithmetic agent), so recall honestly reports sub-100%.
+- **Metric arithmetic unit-tested** independent of any model.
 
-## Honest caveats (small fixture, real limits)
+Numbers vary with the captured n=1 snapshot, so I don't hard-code them here — run
+`python eval/run_evals.py` for the current recall, precision band, and pending count.
 
-I'd rather state these than have them found:
+## Honest caveats
 
-- **Small denominators.** The gold set now spans two cases (the provided Rivera
-  matter plus a synthetic contract case authored to test generalization), 9
-  planted flaws/controls total — aggregate recall **8/9**, precision band
-  **[71%, 83%]** with one false positive. The one honest recall miss is Rivera's
-  intra-document arithmetic slip (the "362 days" off-by-one), planted with
-  `expected_to_be_missed` because there is no arithmetic-checking agent — so the
-  sub-100% is real, not staged. The one false positive is the synthetic
-  deadline-renegotiation over-flag described above — also real, also reported. Two
-  cases prove the *method* carries past one fixture, but they don't make the *rate*
-  statistically settled. The Wilson CIs say so; more cases is the obvious next
-  step, not a claim made.
-- **Post-gate hallucination is ~0 "by construction."** The hallucination check
-  reuses the pipeline's own grounding check, so on the shipped report it's
-  near-tautological. That's why `--live` runs a **pre-gate vs post-gate
-  ablation**: it measures the raw model's fabrication rate before the gate and
-  compares. On the runs I captured the model fabricated nothing, so the gate
-  removed 0 — reported honestly rather than claimed as a win.
-- **Precision is scoped to the cross-doc flag stream**, not the whole pipeline. A
-  spurious citation verdict wouldn't count as a false positive, because scoring
-  that would need its own "citations that must not be flagged" label set the
-  fixture doesn't have. Documented in `metrics.py` as a deliberate scope, not an
-  oversight.
-- **The honesty axis is intentionally lenient about `contradicted`.** A fictional
-  authority may be reported `contradicted` *if* it carries a `flag_type` that
-  justifies it (e.g. the Privette "never liable" overstatement is internally
-  detectable). A bare `contradicted` with no flag fails the axis — that's the
-  line between a justified internal finding and an unfounded claim.
-- **The honesty axis tests BOTH failure directions.** Beyond "never fabricate
-  support for a fake case", a second control (`real_authorities_not_overflagged`)
-  checks the opposite error: condemning a *genuine*, accurately-cited authority.
-  The brief cites two real California Supreme Court Privette-doctrine cases
-  (Privette itself and SeaBright v. US Airways) accurately; a precise pipeline must
-  not mark them contradicted. Without this control a pipeline could "pass" honesty
-  by reflexively distrusting everything — including real law. (An earlier draft of
-  the gold set mislabeled SeaBright as fabricated; that was a factual error in the
-  ground truth, since corrected — the gold is only as trustworthy as its labels,
-  so the labels are verified against the documents and against real reporters.)
-- **A planted hard-negative surfaced a real false positive — kept, not hidden.**
-  The synthetic case's `deadline_true` negative (the contract's true Feb 28
-  deadline) is flagged `contradicted` by the pipeline, which mistakes a later
-  "revised schedule" note for a contradiction of what the deadline *was*. The eval
-  reports this as **FP=1** (synthetic precision band drops to [75%, 75%]) rather
-  than burying the spurious flag in the unscored pending bucket. It is exactly the
-  over-flagging error a precision near-miss is meant to catch; reporting it is the
-  point.
-- **Prompt-injection defense is asymmetric — disclosed, not papered over.** The
-  per-document sentinel + system header reduce *forgery* (a document forging a
-  delimiter or issuing commands) and the grounding gate kills *fabricated evidence*.
-  But an injection that *suppresses* a true contradiction — steering an agent to
-  stay silent — produces an empty/short finding list, and every downstream gate
-  only inspects findings that exist. So injection-driven **false negatives** have no
-  structural backstop here; the mitigations are prompt-layer, not a guarantee. A
-  production answer would add a recall floor / canary (a known planted conflict the
-  pipeline must always surface) to detect suppression. Named, not built.
+- **Small denominators** (two cases, 9 planted flaws/controls). Two cases prove the
+  *method* generalizes past one fixture; the Wilson CIs say the *rate* isn't settled.
+- **Post-gate hallucination is ~0 "by construction"** (the check reuses the grounding
+  gate), which is why `--live` runs a pre/post-gate ablation against the raw model.
+- **Precision is scoped to the cross-doc flag stream** — a spurious citation verdict
+  isn't counted, since that needs a "citations that must not be flagged" label set
+  the fixture lacks. The citation stream is reported as a separate diagnostic.
+- **Prompt-injection defense is asymmetric**: the per-document sentinel + grounding
+  gate stop forgery and fabricated evidence, but injection that *suppresses* a true
+  finding has no structural backstop. A production answer is a recall-floor canary.
 
-## What I'd do differently / next
+## What I'd do next
 
-- **An arithmetic/temporal-consistency agent** for the date-math class of defect
-  the current pipeline misses (the planted, deliberately-missed arithmetic flaw).
-- **A real existence check for citations** (CourtListener / eyecite) to turn
-  "internal plausibility" into a true verified/not-found signal — the genuinely
-  correct *production* upgrade, deliberately out of scope here because the
+- An **arithmetic/temporal agent** for the date-math defect the pipeline misses.
+- A **real citation existence check** (CourtListener / eyecite) to turn internal
+  plausibility into a true verified/not-found signal — out of scope here because the
   authorities are fictional and it adds a live dependency.
-- **An entailment/NLI faithfulness pass** (MiniCheck/RAGAS) to catch
-  unsupported-inferences-in-real-words, which verbatim grounding can't. Named as
-  the upgrade path in `grounding.py`; not built, because it's heavier than a
-  take-home warrants and trades determinism for recall.
-- **More cases + CIs**, and a confidence-scoring layer (Tier 3) calibrated from
-  logprobs rather than a self-reported number, which would be fiction.
+- An **entailment/NLI faithfulness pass** (MiniCheck/RAGAS) for unsupported
+  inferences in real words, which verbatim grounding can't catch.
 
 ## On scope discipline
 
-The hardest calls were the ones to *not* build: no framework (a 2-agent graph is
-clearer with native structured outputs), no debate loop, no NLI gate, no external
-citation DB, no multi-judge jury. Each is a real production upgrade and a
-take-home over-engineering trap. I'd rather ship something I can fully defend and
-name the frontier than bolt on capability I can't justify in the time given.
+The hardest calls were the ones *not* to build: no debate loop, no NLI gate, no
+external citation DB, no multi-judge jury. Each is a real production upgrade and a
+take-home over-engineering trap. I'd rather ship something I can fully defend and name
+the frontier than bolt on capability I can't justify in the time given.

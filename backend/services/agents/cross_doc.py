@@ -31,9 +31,10 @@ async def check_cross_doc_consistency(docs: dict[str, str]) -> list[Finding]:
     messages = build_messages(CROSS_DOC_SYSTEM, msj=msj, **references)
     result = await call_llm_structured(messages=messages, schema=CrossDocOutput)
 
-    # Stamp provenance ourselves rather than trusting the model to fill it.
-    for finding in result.findings:
-        finding.raised_by = AGENT_NAME
+    # Promote each emitted draft to a full Finding, stamping provenance ourselves
+    # rather than trusting the model. (Drafts carry no confidence — that's scored
+    # deterministically downstream; see schemas.FindingDraft for why.)
+    findings = [draft.to_finding(AGENT_NAME) for draft in result.findings]
 
-    logger.info("cross_doc_done", extra={"count": len(result.findings)})
-    return result.findings
+    logger.info("cross_doc_done", extra={"count": len(findings)})
+    return findings

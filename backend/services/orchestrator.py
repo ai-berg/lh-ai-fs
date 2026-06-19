@@ -138,7 +138,7 @@ async def run_pipeline(
     citation_agent: CitationAgent | None = None,
     cross_doc_agent: FindingAgent | None = None,
     quote_accuracy_agent: FindingAgent | None = None,
-    memo_agent: Callable[[list[Finding]], Awaitable[object]] | None = None,
+    memo_agent: Callable[[list[Finding], list[Citation]], Awaitable[object]] | None = None,
 ) -> VerificationReport:
     """Run the full pipeline and return a grounded, confidence-scored report with memo."""
     # Guard the input BEFORE running agents: an empty/whitespace MSJ would make the

@@ -1,12 +1,17 @@
 fastapi
 uvicorn
-openai
+# openai>=2: the structured-parse surface we use is `chat.completions.parse` (the
+# un-prefixed 2.x path, not the old `.beta...parse`). Without this floor a resolver
+# could legally install a 1.x release and fail at runtime instead of at install.
+openai>=2.0
 python-dotenv
-pydantic
+# pydantic>=2: we rely on v2-only APIs (model_validator(mode="after"), ConfigDict).
+pydantic>=2.0
 pyyaml
 # LangChain is used ONLY for the JudicialMemoAgent's synthesis chain (a single
 # prompt|llm|structured-output LCEL pipeline) — the canonical use case for a chain.
 # The fan-out agents stay on the OpenAI SDK directly, where a framework would be pure
 # overhead. See REFLECTION.md for the "use the framework where it pays" rationale.
-langchain-core
-langchain-openai
+# Floored at the LCEL/with_structured_output API surface we use.
+langchain-core>=0.3
+langchain-openai>=0.2

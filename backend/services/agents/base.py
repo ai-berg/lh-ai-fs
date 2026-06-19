@@ -15,26 +15,21 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
-# Generous enough for a reasoning model (GPT-5.5) running a chain-of-thought
-# rubric over the full case file: a single citation-audit pass measured ~50s, so
-# 45s was too tight. This bounds a stuck call without cutting off normal work.
 # Per-agent timeout. 120s is sized for a GPT-5.5 reasoning call with field-ordered
-# chain-of-thought over the full case file (measured ~50-90s); overridable via env so
-# a larger corpus can raise it without a code change. It bounds EACH agent, and the
-# fan-out agents run concurrently, so the fan-out wall-clock is ~one agent, not the
-# sum — the sequential memo step adds its own bounded slice on top.
+# chain-of-thought over the full case file (measured ~50-90s); overridable via
+# AGENT_TIMEOUT_SECONDS for a larger corpus. It bounds EACH agent, and the fan-out
+# agents run concurrently, so the fan-out wall-clock is ~one agent, not the sum — the
+# sequential memo step adds its own bounded slice on top.
 def _timeout_seconds() -> float:
-    # Parse defensively, like STRUCTURED_MAX_TOKENS: a malformed override must not
-    # crash the app at import,
-    # before any per-agent fallback could run. Fall back to the default.
+    # Read at the CALL SITE (not frozen at import) so the value reflects the env AFTER
+    # any lazy load_dotenv() — on a host run the .env is loaded when llm.py first runs,
+    # which is later than this module's import. Parse defensively so a malformed
+    # override falls back to the default instead of crashing.
     try:
         return float(os.getenv("AGENT_TIMEOUT_SECONDS", "120") or "120")
     except ValueError:
         logger.warning("invalid AGENT_TIMEOUT_SECONDS override; using default 120")
         return 120.0
-
-
-DEFAULT_TIMEOUT_SECONDS = _timeout_seconds()
 
 
 class Agent(Protocol):
@@ -51,7 +46,7 @@ async def run_agent(
     *,
     fallback: T,
     degraded: list[str],
-    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    timeout: float | None = None,
     retries: int = 1,
 ) -> T:
     """Run one agent resiliently.
@@ -59,6 +54,8 @@ async def run_agent(
     Retries once on timeout/exception, then returns ``fallback`` and appends
     ``name`` to ``degraded`` so the report stays transparent about coverage.
     """
+    if timeout is None:
+        timeout = _timeout_seconds()  # read here so a host .env override takes effect
     attempts = retries + 1
     for attempt in range(1, attempts + 1):
         try:

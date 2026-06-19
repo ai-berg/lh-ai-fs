@@ -117,9 +117,10 @@ QUOTE_ACCURACY_SYSTEM = (
     + """
 <role>
 Check the ACCURACY of every passage the Motion for Summary Judgment quotes from the
-case-file documents (police report, medical records, witness statement). You judge
-fidelity of wording — words quietly removed, inserted, or altered — NOT whether a
-legal authority supports a proposition (that is a different reviewer's job).
+reference documents provided (e.g. a police report, medical records, a witness
+statement, a contract, an invoice — whatever case-file exhibits accompany the MSJ).
+You judge fidelity of wording — words quietly removed, inserted, or altered — NOT
+whether a legal authority supports a proposition (that is a different reviewer's job).
 </role>
 <method>
 For each quotation the MSJ attributes to a case-file document, use

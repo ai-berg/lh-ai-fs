@@ -102,21 +102,28 @@ def _dedupe_findings(findings: list[Finding]) -> list[Finding]:
     which is exactly the live-run failure mode. The shared signal that it's ONE defect
     is the MSJ claim under scrutiny, so we collapse on the normalized claim. Nor the
     evidence span, since the two agents quote different spans (the altered MSJ text vs
-    the original source clause). The FIRST finding wins (stable order: cross-doc runs
-    first); the survivor records BOTH agents in `raised_by` so attribution isn't lost.
+    the original source clause).
+
+    Which finding SURVIVES is not "the first": `quote_altered` is the more specific
+    verdict (and the one the eval credits for a quote-edit flaw), so it wins over a
+    generic `factual_contradiction` even though CrossDoc runs first. That preserves
+    QuoteAccuracy's dedicated classification and evidence instead of dropping it. The
+    survivor records BOTH agents in `raised_by` so attribution isn't lost.
     """
     seen: dict[str, Finding] = {}
     order: list[str] = []
     for f in findings:
         key = normalize(f.msj_claim)
-        if key in seen:
-            prior = seen[key]
-            others = {a.strip() for a in prior.raised_by.split("+")}
-            if f.raised_by and f.raised_by not in others:
-                seen[key] = prior.model_copy(update={"raised_by": f"{prior.raised_by}+{f.raised_by}"})
+        if key not in seen:
+            seen[key] = f
+            order.append(key)
             continue
-        seen[key] = f
-        order.append(key)
+        prior = seen[key]
+        agents = {a.strip() for a in prior.raised_by.split("+")}
+        agents.update(a.strip() for a in f.raised_by.split("+") if a.strip())
+        # Prefer the quote_altered verdict (more specific; what the eval credits).
+        winner = f if str(f.flag_type) == "quote_altered" and str(prior.flag_type) != "quote_altered" else prior
+        seen[key] = winner.model_copy(update={"raised_by": "+".join(sorted(agents))})
     return [seen[k] for k in order]
 
 

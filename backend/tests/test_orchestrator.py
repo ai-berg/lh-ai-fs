@@ -29,12 +29,16 @@ def test_dedup_collapses_same_defect_despite_different_flag_types():
     # differently — CrossDoc's prompt steers it to factual_contradiction, QuoteAccuracy
     # to quote_altered. Dedup must STILL collapse them (keyed on the shared msj_claim,
     # not flag_type) and attribute both agents.
+    # CrossDoc runs first (factual_contradiction); the more specific quote_altered
+    # verdict from QuoteAccuracy must WIN the collapse (it's what the eval credits),
+    # not simply "the first finding". Both agents are still attributed.
     findings = [
         _f("Section 7.2 quoted without limitation", FlagType.FACTUAL_CONTRADICTION, "CrossDocConsistencyAgent"),
         _f("Section 7.2 quoted without limitation", FlagType.QUOTE_ALTERED, "QuoteAccuracyAgent"),
     ]
     out = _dedupe_findings(findings)
     assert len(out) == 1
+    assert out[0].flag_type == FlagType.QUOTE_ALTERED  # specific verdict preserved
     assert "CrossDocConsistencyAgent" in out[0].raised_by
     assert "QuoteAccuracyAgent" in out[0].raised_by
 

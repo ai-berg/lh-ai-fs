@@ -119,7 +119,9 @@ def _dedupe_findings(findings: list[Finding]) -> list[Finding]:
             order.append(key)
             continue
         prior = seen[key]
-        agents = {a.strip() for a in prior.raised_by.split("+")}
+        # Collect non-empty agent names from both (raised_by defaults to "" on Finding,
+        # so filter blanks to avoid a stray leading "+" in the joined attribution).
+        agents = {a.strip() for a in prior.raised_by.split("+") if a.strip()}
         agents.update(a.strip() for a in f.raised_by.split("+") if a.strip())
         # Prefer the quote_altered verdict (more specific; what the eval credits).
         winner = f if str(f.flag_type) == "quote_altered" and str(prior.flag_type) != "quote_altered" else prior

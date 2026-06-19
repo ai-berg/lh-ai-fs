@@ -31,7 +31,7 @@ async def check_quote_accuracy(docs: dict[str, str]) -> list[Finding]:
     references = {name: text for name, text in docs.items() if name != MSJ_DOC}
     # Need both the MSJ (the quotes) and at least one source (to compare against);
     # without either there is nothing to check, so don't spend a model call.
-    if not msj or not references:
+    if not msj.strip() or not references:
         logger.warning("quote_accuracy_missing_inputs")
         return []
 

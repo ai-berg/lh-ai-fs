@@ -68,8 +68,8 @@ class ConfidenceScore(_EnumValueModel):
     """How certain the pipeline is about a flag, with the reasoning behind it.
 
     DETERMINISTIC by design: `value`/`band` are computed from verifiable signals on
-    the grounded finding (is it asserted or abstained? how many reference documents
-    corroborate it? how severe?), never self-reported by the model. `reasoning` is
+    the grounded finding (is it asserted or abstained? how many *distinct* reference
+    documents corroborate it?), never self-reported by the model. `reasoning` is
     generated FROM those signals, so the number is auditable — you can reconstruct it
     by hand. This is the "traceable reasoning" the product is built on; a model-
     invented 0.87 would be exactly the unverifiable number it sets out to replace.

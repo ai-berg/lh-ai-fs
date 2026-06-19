@@ -19,20 +19,6 @@ from services.grounding import ground_citation_quotes, normalize, validate_groun
 
 logger = logging.getLogger(__name__)
 
-# Fixture-specific heuristic: the sample Rivera MSJ cites 11 authorities. Used
-# ONLY to log a soft warning on a suspiciously low extraction; it never fails the
-# request, and is the one sample-coupled constant here (overridable via env).
-def _expected_min_citations() -> int:
-    # Parse defensively: a malformed override must not crash (this value only gates a
-    # soft warning), so fall back to the default. Read at the CALL SITE (not cached
-    # at import) so a runtime/test env override — e.g. monkeypatch.setenv — actually
-    # takes effect; a module-level constant would freeze the import-time value.
-    try:
-        return int(os.getenv("EXPECTED_MIN_CITATIONS", "11"))
-    except ValueError:
-        logger.warning("invalid EXPECTED_MIN_CITATIONS override; using default 11")
-        return 11
-
 
 class EmptyCorpusError(ValueError):
     """No usable MSJ in the corpus — the pipeline has nothing to audit.
@@ -100,12 +86,14 @@ def apply_grounding(
 def _dedupe_findings(findings: list[Finding]) -> list[Finding]:
     """Collapse co-located findings that two agents raised about the SAME defect.
 
-    WHY this is needed: CrossDoc and QuoteAccuracy genuinely overlap on the highest-
-    value case — a quotation edited to drop a limiting clause is *both* an unfaithful
-    quote (QuoteAccuracy's lane) *and* the factual conflict that creates (CrossDoc's
-    lane). On the committed synthetic run both agents flag the same Section 7.2 edit,
-    so without dedup a judge would see TWO findings for ONE defect — inflating the
-    count, which for a calibrated-counts product is a credibility failure.
+    WHY this is needed: CrossDoc and QuoteAccuracy can overlap on the highest-value
+    case — a quotation edited to drop a limiting clause is *both* an unfaithful quote
+    (QuoteAccuracy's lane) *and* the factual conflict that creates (CrossDoc's lane).
+    When both fire on the same MSJ claim, without dedup a judge would see TWO findings
+    for ONE defect — inflating the count, which for a calibrated-counts product is a
+    credibility failure. (Whether both fire on a given run is model-dependent and not
+    guaranteed by the committed snapshots; the collapse behavior is pinned by
+    test_orchestrator.py rather than by any one captured run.)
 
     Dedup key: normalized msj_claim ALONE — deliberately NOT flag_type. The two agents
     are prompted to LABEL the same edit differently (CrossDoc may call it
@@ -171,13 +159,6 @@ async def run_pipeline(
     # structured flags remain the source of truth. Passing citations matters: a brief
     # whose only defect is a bad authority must still produce a memo for the judge.
     memo = await _run_memo(scored, citations, degraded, memo_agent)
-
-    expected_min = _expected_min_citations()
-    if "CitationAuditAgent" not in degraded and len(citations) < expected_min:
-        logger.warning(
-            "citation_count_below_expected",
-            extra={"got": len(citations), "expected_min": expected_min},
-        )
 
     return VerificationReport(
         citations=citations, flags=scored, judicial_memo=memo, degraded_agents=degraded

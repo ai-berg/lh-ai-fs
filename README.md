@@ -47,10 +47,9 @@ Each flag also carries a **deterministic confidence band** (`services/confidence
 derived from verifiable signals — chiefly how many *distinct* reference documents
 corroborate it — not a number the model self-reports. `HIGH` (three corroborating
 documents) means independent documents agree; the score is reproducible by hand and
-auditable on hover in the UI. The bands vary run to run with how many sources the
-agent quotes, so read them off the committed artifact rather than this prose:
-`jq '.flags[].confidence.band' backend/tests/fixtures/analyze_snapshot.json` (on the
-snapshot as committed, the incident-date flag reaches `HIGH`; the others are `MEDIUM`).
+auditable on hover in the UI. Because a band depends on how many sources the run
+surfaces, I keep the exact figures in the artifact rather than the prose — see
+`jq '.flags[].confidence.band' backend/tests/fixtures/analyze_snapshot.json`.
 
 ## Architecture
 
@@ -130,9 +129,10 @@ monkeypatched LLM).
 
 End-to-end behavior is pinned by a **committed snapshot** of a real GPT-5.5 run
 on the case file (`tests/fixtures/analyze_snapshot.json`); `test_snapshot.py`
-asserts its load-bearing properties (all 11 authorities extracted, fictional
-authorities never fabricated as "verified", every contradiction flag grounded,
-the PPE contradiction caught). Regenerate it with
+asserts its load-bearing properties (every cited authority extracted, fictional
+authorities never fabricated as "verified", every contradiction flag grounded, the
+PPE contradiction caught, every flag confidence-scored, the judicial memo present and
+neutral). Regenerate it with
 `docker compose exec backend python scripts/capture_snapshot.py`.
 
 ## Evals
@@ -149,26 +149,23 @@ pip install -r backend/requirements.txt && python run_evals.py
 The harness scores the pipeline against hand-labeled gold sets across **two
 cases** — the provided Rivera matter (`backend/eval/gold_set.yaml`) and a synthetic
 contract case (`backend/eval/cases/synthetic_contract/`) authored to show the method
-generalizes past one fixture — and reports per-case **and aggregate**, honestly:
+generalizes past one fixture — and reports per-case **and aggregate**:
 
-- **Recall** — planted flaws caught, per flaw. The gold set includes a flaw the
-  pipeline is *expected to miss* (an intra-document arithmetic slip with no
-  checking agent), so the Rivera case reports an honest **5/6** and the
-  cross-case **aggregate is 8/9** — never a staged 100%. The honesty axis runs in
-  both directions: a control flaw checks that the two *real* authorities the brief
-  cites accurately (Privette, SeaBright) are **not** over-flagged as fabricated.
+- **Recall** — planted flaws caught, per flaw. The gold set deliberately includes a
+  flaw the pipeline is *expected to miss* (an intra-document arithmetic slip, no
+  checking agent), so recall lands below 100% rather than a staged perfect score.
+  The honesty axis runs in both directions: a control flaw checks that the two *real*
+  authorities the brief cites accurately (Privette, SeaBright) are **not** over-flagged
+  as fabricated. (Run `run_evals.py` for the current per-case and aggregate numbers.)
 - **Precision** — false flags landing on labeled *negatives* (true MSJ statements
   that must not be flagged); without negatives precision is meaningless, so each
   gold set ships hard negatives the model is tempted to flag but must not. The
   synthetic case ships a hard negative (a true contract deadline a zealous pipeline
-  over-flags as contradicted by a later schedule revision) — and across snapshot
-  captures the pipeline has both tripped it (FP=1) and avoided it (FP=0), reported
-  as-is either way. The exact precision band, TP/FP, and pending count vary with the
-  captured run (it's an n=1 LLM sample), so **the numbers live in `run_evals.py`, not
-  in this prose** — run it for the current figures rather than trusting a transcribed
-  band that drifts. Plausible-but-unplanted findings go to a `pending_adjudication`
-  bucket — scored neither right nor wrong, so the number isn't gamed in either
-  direction. **Scope:** precision is measured over the cross-doc *flag* stream; the
+  is tempted to over-flag as contradicted by a later schedule revision). Since the
+  exact precision band and TP/FP depend on the captured run (an n=1 LLM sample), I
+  keep those figures in `run_evals.py` rather than this prose — run it for the current
+  numbers. Plausible-but-unplanted findings go to a `pending_adjudication` bucket —
+  scored neither right nor wrong, so the number isn't gamed in either direction. **Scope:** precision is measured over the cross-doc *flag* stream; the
   citation-support stream has no labeled "citation that must not be flagged" set, so
   it is reported as a separate diagnostic (flag-type distribution + a check that an
   `overstatement` carries the quote it overstates) rather than folded into the band.
@@ -223,8 +220,9 @@ AI assistant, ~600k users):**
   informed by recent grounded-generation work (e.g. Google's FACTS Grounding
   benchmark, MiniCheck). This shaped the "cite the shortest span containing the
   fact" instruction and the word-boundary grounding check.
-- *Native structured outputs over a heavyweight agent framework* — a deliberate
-  simplicity choice for a small agent graph, rather than reaching for LangChain.
+- *Framework where it pays, not by default* — native structured outputs on the
+  OpenAI SDK for the parallel fan-out (no chaining to justify a framework), and
+  LangChain (LCEL) only for the memo's single synthesis chain.
 
 ## The assessment
 

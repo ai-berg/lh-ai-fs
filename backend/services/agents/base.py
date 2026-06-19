@@ -24,8 +24,8 @@ T = TypeVar("T")
 # fan-out agents run concurrently, so the fan-out wall-clock is ~one agent, not the
 # sum — the sequential memo step adds its own bounded slice on top.
 def _timeout_seconds() -> float:
-    # Parse defensively, like the other env knobs (EXPECTED_MIN_CITATIONS,
-    # STRUCTURED_MAX_TOKENS): a malformed override must not crash the app at import,
+    # Parse defensively, like STRUCTURED_MAX_TOKENS: a malformed override must not
+    # crash the app at import,
     # before any per-agent fallback could run. Fall back to the default.
     try:
         return float(os.getenv("AGENT_TIMEOUT_SECONDS", "120") or "120")

@@ -25,10 +25,10 @@ def _f(claim, flag_type, raised_by, status=VerificationStatus.CONTRADICTED):
 
 
 def test_dedup_collapses_same_defect_despite_different_flag_types():
-    # The real live-run case: the two agents are prompted to LABEL the same Section 7.2
-    # edit differently — CrossDoc emits factual_contradiction (its prompt forbids
-    # quote_altered), QuoteAccuracy emits quote_altered. Dedup must STILL collapse them
-    # (keyed on the shared msj_claim, not flag_type) and attribute both agents.
+    # The real live-run case: the two agents LABEL the same Section 7.2 edit
+    # differently — CrossDoc's prompt steers it to factual_contradiction, QuoteAccuracy
+    # to quote_altered. Dedup must STILL collapse them (keyed on the shared msj_claim,
+    # not flag_type) and attribute both agents.
     findings = [
         _f("Section 7.2 quoted without limitation", FlagType.FACTUAL_CONTRADICTION, "CrossDocConsistencyAgent"),
         _f("Section 7.2 quoted without limitation", FlagType.QUOTE_ALTERED, "QuoteAccuracyAgent"),
@@ -209,13 +209,3 @@ async def test_empty_msj_raises_rather_than_returning_empty_report():
             citation_agent=_citation_agent_ok,
             cross_doc_agent=_cross_doc_agent_ok,
         )
-
-
-def test_expected_min_citations_reads_env_at_call_site(monkeypatch):
-    # The override must take effect at runtime, not be frozen at import.
-    from services.orchestrator import _expected_min_citations
-
-    monkeypatch.setenv("EXPECTED_MIN_CITATIONS", "3")
-    assert _expected_min_citations() == 3
-    monkeypatch.setenv("EXPECTED_MIN_CITATIONS", "not_a_number")
-    assert _expected_min_citations() == 11  # falls back, doesn't crash

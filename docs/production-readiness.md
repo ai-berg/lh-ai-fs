@@ -63,7 +63,7 @@ recovery story.
 ```
                           BS Detector — MVP system context
    ┌──────────┐  upload (presigned PUT)   ┌──────────────────────────────────┐
-   │ Law-firm │ ────────────────────────► │ S3  documents/{tenant}/{matter}/ │ (SSE-KMS, per-tenant prefix)
+   │ Law-firm │ ────────────────────────► │ S3  documents/{tenant}/{matter}/ │ (SSE-S3, per-tenant prefix)
    │  user    │                           └──────────────────────────────────┘
    │ (tenant, │  POST /analyze (202+job)  ┌──────────────┐  enqueue   ┌──────────────┐
    │  matter, │ ────────────────────────► │  API /control│ ─────────► │ SQS  + DLQ   │
@@ -84,11 +84,14 @@ recovery story.
                                                                   └────────────────┘
 ```
 
-1. **API / control plane** — API Gateway + a small FastAPI (Lambda via Mangum, or Fargate behind an ALB).
-   Owns auth, tenant resolution, presigned uploads, job creation, and the **millisecond** status/report
-   reads. It does **not** run analysis. *Rationale:* the thing that answers in milliseconds (status) must
-   never share a process with the thing that takes minutes (analysis).
-2. **Document store** — S3, one prefix per tenant (`s3://bucket/{tenant_id}/{matter_id}/...`), SSE-KMS (Q6).
+1. **API / control plane** — **API Gateway (HTTP API) + a small FastAPI on Lambda (via Mangum)**. Owns auth,
+   tenant resolution, presigned uploads, job creation, and the **millisecond** status/report reads. It does
+   **not** run analysis. *Rationale:* the thing that answers in milliseconds (status) must never share a
+   process with the thing that takes minutes (analysis) — and the reads are bursty and tiny, a textbook
+   scale-to-zero fit. **`(ours)`** I deliberately *don't* put this behind a standing ALB+Fargate: an idle ALB
+   bills 24/7, and it would be the only always-on cost in an otherwise scale-to-zero stack. Fargate stays the
+   named, deferred escape hatch for the irreducible large *matter* (Q3) — never the API plane.
+2. **Document store** — S3, one prefix per tenant (`s3://bucket/{tenant_id}/{matter_id}/...`), SSE-S3 at rest (Q6).
    *Rationale:* confidential docs are the highest-risk asset; isolating at the storage+key layer is the
    cheapest strong tenant boundary.
 3. **Job/state store** — DynamoDB. **`(ours, justified — not familiarity)`** PK `tenant_id`, SK `job_id`
@@ -207,7 +210,7 @@ with **auditability** as the tie-breaker for a legal product.
 
 | Data | Disposition | Why |
 |---|---|---|
-| Uploaded documents (S3) | **Durable** | System of record; irreplaceable customer data. SSE-KMS, versioned, per-tenant prefix. |
+| Uploaded documents (S3) | **Durable** | System of record; irreplaceable customer data. SSE-S3 at rest, versioned (with a noncurrent-version expiry lifecycle rule), per-tenant prefix. |
 | Job row (DynamoDB) | **Durable** | The **auditability spine** — what was asked, when, by whom, what happened, `degraded_agents`. Customers expect it. |
 | Final `VerificationReport` (S3, immutable) | **Durable** | A legal deliverable a firm may cite — must be byte-reproducible and **never silently regenerated against a newer model**. Re-running spends real money and is non-deterministic at the model layer. |
 | Provenance bundle (with the report) | **Durable** | `STRUCTURED_MODEL` snapshot id, prompt-bundle hash, grounding-module version, gating eval-suite version, input-doc hashes. Answers *"why did this report differ from last month?"* — the first question a firm asks. |
@@ -289,8 +292,8 @@ is enforced at the **cheapest strongest layer**, not in app code alone.
         ├──► SQS message:   {tenant_id, matter_id, job_id}
         └──► Worker role:   tenant-scoped — a job for A CANNOT construct a path into B
                                    │
-                            SSE-KMS + tenant-scoped role ─► a job for A cannot path into B
-                                                    (per-tenant keys/crypto-shred = deferred)
+                            SSE-S3 + tenant-scoped role ─► a job for A cannot path into B
+                                                    (KMS / per-tenant keys / crypto-shred = deferred)
 ```
 
 - **Tenant identity resolved once, at the edge — never re-derived from a request body.** **OIDC/JWT at the
@@ -299,13 +302,14 @@ is enforced at the **cheapest strongest layer**, not in app code alone.
   DynamoDB partition key, and the worker reads it from there, never from input. *The most common multi-tenant
   breach is a downstream service trusting a `tenant_id` it got from the caller* — closed structurally by the
   tenant-scoped IAM role + partition key + prefix below, not by re-verifying a signature at each hop.
-- **Storage isolation.** S3 **per-tenant prefix + bucket-level SSE-KMS**, with a **tenant-scoped IAM worker
-  role**. **`(ours)`** That trio already delivers encryption-at-rest *and* the existential cross-tenant
-  boundary (a job for tenant A literally cannot construct a path into B). **Per-tenant keys
-  (envelope/DEK → crypto-shred, and a dedicated CMK) are deferred together** — they buy *delete-the-key =
-  delete-the-tenant*, which is a security-review feature, not a launch necessity, and per-key request-rate/cost
-  only bites at hundreds of busy tenants. I promote per-tenant keying when a firm's review asks; shipping it
-  at MVP would be complexity ahead of the threat the prefix+role boundary already closes.
+- **Storage isolation.** S3 **per-tenant prefix + bucket-level SSE-S3 (free AES-256)**, with a **tenant-scoped
+  IAM worker role**. **`(ours)`** That trio already delivers encryption-at-rest *and* the existential
+  cross-tenant boundary (a job for tenant A literally cannot construct a path into B) — and the doc's own
+  position is that the boundary is the prefix + role, *not* the key, so KMS buys nothing extra at launch while
+  billing per-request `GenerateDataKey`/`Decrypt` on every doc read. **KMS and per-tenant keys
+  (envelope/DEK → crypto-shred, a dedicated CMK) are deferred together**, promoted at the same security-review
+  trigger — they buy *delete-the-key = delete-the-tenant*, a review feature, not a launch necessity. Shipping
+  any of it at MVP would be cost and complexity ahead of the threat the prefix+role boundary already closes.
 - **Request isolation.** Workers assume a tenant-scoped role; the blast radius of an agent logic bug is **one
   tenant, structurally** — not a runtime `if`-check.
 - **Intra-firm ethical walls — stated, not silently skipped `(legal-domain, named)`.** Tenant isolation
@@ -367,11 +371,15 @@ Three different questions, three instruments — and the hard-won rule: **observ
   handle. New pending-adjudication findings feed gold-set growth, so the eval gets stronger from production.
 
 **The lesson baked in (what I'd do better).** A dashboard built by hand in the console — *not* in Terraform —
-broke silently when a deploy renamed log phrases: metric filters went blind without telling anyone. So for
-the MVP **every alarm, filter, and dashboard is Terraform from day one, and I alarm on the ABSENCE of
-expected datapoints**: *"no successful analyses in N minutes during business hours"* fires; *"the
-grounding-check-ran metric went to zero"* pages — because a metric that silently goes to zero looks identical
-to "healthy," and that silent silence is the failure mode that actually burned me.
+broke silently when a deploy renamed log phrases: metric filters went blind without telling anyone. So
+**observability-as-code is the principle from day one** — but *right-sized for a 5-person team*: day one I
+ship only the **handful of alarms that actually page someone** (DLQ depth, SQS age-of-oldest-message, Lambda
+error rate, LLM 429/timeout rate) plus **one absence alarm** (*"no successful analyses in N minutes during
+business hours"*), all in Terraform. The dashboards, the broader absence-alarm set, and the scheduled
+recall-floor canary wait until design partners are live and there's real traffic to calibrate "expected"
+against — building the full suite before there's anything to observe is ops-time a tiny team doesn't have.
+The absence-alarm instinct is the non-negotiable part: a metric that silently goes to zero looks identical to
+"healthy," and that silent silence is the failure mode that actually burned me.
 
 **Privilege-preserving by construction `(ours)`:** the metric stream stores **counts and rates only**, never
 document text or quote bodies; gold sets stay **synthetic/curated**, so no privileged matter is ever baked
@@ -398,15 +406,20 @@ adds one more call); that's the target I'd validate against real traffic, not a 
 
 1. **Split the synchronous `POST /analyze`** into accept (`202 + job_id`) + `GET /jobs/{id}` status +
    `GET /jobs/{id}/report`. The single load-bearing change — it makes long jobs survivable.
-2. **S3 (per-tenant prefix + SSE-KMS + tenant-scoped role) + presigned upload; DynamoDB job table with atomic
+2. **S3 (per-tenant prefix + SSE-S3 + tenant-scoped role) + presigned upload; DynamoDB job table with atomic
    conditional idempotency; SQS + DLQ; the Part 1 orchestrator hosted unchanged on `SQS→Lambda`** with a
-   **capped reserved concurrency** as the spike throttle, and a **one-line larger-context model fallback** on
-   the `llm.py` seam for an unusually big matter. (Per-tenant token budgets, map-reduce, and a second compute
-   plane are deliberately *not* here — see deferred.)
-3. **Tenant isolation** at the storage/key/partition layer + `(tenant_id, matter_id, role)` minted once at
-   the edge and threaded end-to-end.
-4. **Terraform for all of it, INCLUDING the CloudWatch alarms** — observability-as-code from line one.
-5. **eval-as-CI** gating any prompt/model-pin/grounding change.
+   **capped reserved concurrency** as the spike throttle, a **one-line larger-context model fallback** on the
+   `llm.py` seam for an unusually big matter, and a **crude per-matter doc/token ceiling** that fails loudly
+   (reusing the `matter_too_large_for_v1` path) so one bulk upload can't run a surprise bill. (Per-tenant token
+   budgets, map-reduce, and a second compute plane are deliberately *not* here — see deferred.)
+3. **Tenant isolation** at the storage/prefix/partition layer + `(tenant, matter)` minted once at the edge and
+   threaded end-to-end (the `role` dimension is *named* for additive RBAC later, but nothing at MVP wires or
+   reads it, so it isn't threaded yet).
+4. **Terraform for the infra and the handful of paging alarms** (Q7) — observability-as-code as the principle,
+   but only the alarms that page on day one, not the full dashboard/canary suite.
+5. **eval-as-CI**, shipped first as a **non-blocking PR report**, promoted to a hard deploy-blocking gate once
+   the gold sets stabilize and it has caught a real regression — it runs offline at zero API spend, so this is
+   phase-it-in, not a flaky gate a tiny team must keep green from day one.
 
 This is shippable to design-partner firms: upload a matter, poll status, get a reproducible, grounded,
 confidence-scored report, data isolated.
@@ -449,11 +462,12 @@ Named on purpose, so the plan survives a skeptical reviewer — and to keep the 
 - **No intra-tenant authorization sophistication at launch.** Tenant-level isolation ships; `(tenant, matter,
   role)` is *named* so it's additive, but per-user RBAC, SSO/SCIM, matter-level ethical-wall ACLs, and BYOK
   are deferred. Adding Postgres row-level security alongside DynamoDB at MVP is a second state store nobody
-  asked for — the partition-key + per-tenant-KMS boundary defends the same threat.
-- **Per-tenant keying (envelope/DEK *and* a dedicated CMK) is deferred together.** Launch ships bucket-level
-  SSE-KMS + per-tenant prefix + tenant-scoped role — encryption-at-rest and the cross-tenant boundary. The
-  per-tenant key (which buys *delete-the-key = crypto-shred a tenant*) is a security-review feature, not a
-  launch necessity, and per-key request-rate/cost only bites at hundreds of busy tenants — so it is promoted
+  asked for — the partition-key + prefix + tenant-scoped-role boundary defends the same threat.
+- **KMS and per-tenant keying (envelope/DEK *and* a dedicated CMK) are deferred together.** Launch ships
+  free bucket-level **SSE-S3** + per-tenant prefix + tenant-scoped role — encryption-at-rest and the
+  cross-tenant boundary, at zero per-request cost. KMS / per-tenant keys (which buy
+  *delete-the-key = crypto-shred a tenant*) are a security-review feature, not a launch necessity, and
+  per-key request-rate/cost only bites at hundreds of busy tenants — so they are promoted
   when a firm's review asks, not built speculatively.
 - **No streaming / partial-results UX.** Status is coarse (`QUEUED/RUNNING/SUCCEEDED/FAILED` +
   `degraded_agents`); per-agent live streaming is deferred.

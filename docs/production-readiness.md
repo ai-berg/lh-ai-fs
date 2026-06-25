@@ -8,7 +8,7 @@
 > already correct, deterministic where it matters, and provider-portable. Part 2 **relocates** it onto a
 > durable plane; it does not rewrite it.
 >
-> **Where I've lived this.** I operated a production legal-domain RAG assistant embedded in a national
+> **Where I've lived this.** I operated a production legal-domain RAG assistant embedded in a large
 > court system (~600k users, Anthropic Claude on AWS Bedrock). Throughout, I cite that experience as
 > *"here is what I'd do better,"* never as a success story. AWS-first is authentic to it; I draw
 > portability boundaries only where they pay.
@@ -94,8 +94,8 @@ recovery story.
    is its own item guarding the conditional create. The workload is **key-value, high-write-concurrency,
    atomic compare-and-swap** (job status churn), not relational reporting — DynamoDB's conditional writes
    give the single-item CAS idempotency needs, and **on-demand billing soaks write bursts without
-   provisioning** (I've driven this pattern to hundreds of thousands of updates in minutes with zero
-   throttle). A GSI for *list-jobs-by-matter* is purely additive — added the day a list view exists, not now.
+   provisioning** — a property I've leaned on operating DynamoDB as job/rate-limit state under heavy
+   concurrent write load. A GSI for *list-jobs-by-matter* is purely additive — added the day a list view exists, not now.
    I'd reach for Postgres only if the audit/provenance surface turns genuinely relational — a possible
    *second* store later, not a reason to start relational.
 4. **Queue** — SQS standard, one queue + DLQ. Decouples accept from execute, absorbs the launch spike, and is
@@ -265,9 +265,12 @@ the scarce, flaky resource.
   `None` memo with the structured flags still the source of truth.
 
 **`(ours)` Not defended at MVP, named on purpose:** a full provider outage (no multi-provider failover yet —
-Q8), and single-region S3/DynamoDB failure (single-region MVP — deliberate, to avoid repeating a
-multi-region split that made quota/metric debugging error-prone). `run_agent` retries **exactly once** by
-design — a persistently failing agent should degrade and be *visible*, not hammer the provider.
+Q8), and single-region S3/DynamoDB failure (single-region MVP — deliberate). I keep the MVP in **one region on
+purpose**: operating a comparable system whose model/OCR services lived in one AWS region while the rest of the
+stack lived in another, I saw how a cross-region split makes quota and metric debugging error-prone — you check
+a service's quota in the wrong region and it reads zero. A single region removes that whole class of confusion
+at launch; cross-region DR is post-MVP. `run_agent` retries **exactly once** by design — a persistently
+failing agent should degrade and be *visible*, not hammer the provider.
 
 ---
 
@@ -425,11 +428,12 @@ Named on purpose, so the plan survives a skeptical reviewer — and to keep the 
   noisy-neighbor or usage-pricing need. Building it now is complexity ahead of the problem.
 - **OCR / PDF ingest is deferred.** The MVP eats `.txt` exactly as `load_documents` produces. When added:
   Textract **native async** is the routing target (not a custom poller), the **sync path ships first for the
-  ~73% small docs** (the async path's high latency was the *tail*, not the common case), and normalized text
-  is **content-hash-keyed** so re-ingest is a cache hit.
+  large majority of small docs** (the async path's high latency was the *tail*, not the common case), and
+  normalized text is **content-hash-keyed** so re-ingest is a cache hit.
 - **No multi-provider / multi-region.** Single LLM provider (under zero-retention), single AWS region.
-  Provider failover is a later change on the `llm.py` seam — scoped honestly above. One region on purpose, to
-  avoid repeating a multi-region split that made quota/metric debugging error-prone.
+  Provider failover is a later change on the `llm.py` seam — scoped honestly above. One region on purpose
+  (Q5): a cross-region split — where model/OCR services sit in one region and the rest of the stack in
+  another — makes quota and metric debugging error-prone, and the MVP doesn't need that surface yet.
 - **No entailment / NLI faithfulness checking.** Grounding stays the deterministic **verbatim-attribution**
   check it is today (`grounding.py` documents this and names MiniCheck/RAGAS as the upgrade path). It catches
   *fabricated quotes*, not *unsupported inferences built from real words* — acknowledged future work, out of
@@ -451,7 +455,13 @@ Named on purpose, so the plan survives a skeptical reviewer — and to keep the 
   `degraded_agents`); per-agent live streaming is deferred.
 - **No model training / fine-tuning for this MVP.** It's an LLM-API product; the eval harness is the MLOps
   surface. Correctness comes from a deterministic grounding gate, not model weights — training would be
-  over-engineering here.
+  over-engineering here. *Where a trained model would later earn its place, and how I'd ship it:* the deferred
+  NLI/entailment faithfulness classifier and an evidence re-ranker are the natural fine-tuning targets — trained
+  on a curated set of (claim, source-span, supported?) examples with a held-out eval split and calibrated
+  thresholds (optionally distilled from a larger model for serving cost), exposed behind the **same `llm.py` /
+  REST seam**, **gated by the same eval harness** as any model-pin change, and **version-pinned in the report's
+  provenance**. That keeps a PyTorch component, when it arrives, inside the exact MLOps and serving boundaries
+  the MVP already establishes — deferred on purpose, not for lack of a path.
 - **The one honesty gap I will NOT pretend to have closed:** prompt injection that **suppresses a true
   finding** has **no structural backstop.** The per-document `uuid4` sentinel fencing in `prompts.py` is an
   **asymmetric defense** — it stops a malicious document forging or corrupting a *sibling's* finding, but it

@@ -191,7 +191,9 @@ agents, no second state store. Their absence is the design.
 5. **Persist + report.** The worker writes the immutable `VerificationReport` JSON to
    `{tenant}/{matter}/reports/{job}.json`, flips DynamoDB to `SUCCEEDED` with the artifact pointer +
    `degraded_agents`. `GET /jobs/{id}` returns coarse status **+ `degraded_agents` as a partial-coverage
-   signal**; `GET /jobs/{id}/report` streams the artifact, shape-identical to Part 1's `VerificationReport`.
+   signal**; `GET /jobs/{id}/report` returns a **presigned S3 GET** to the artifact (the same presigned
+   pattern as upload) rather than streaming it through Lambda — S3 serves the bytes directly, so we don't pay
+   Lambda duration + egress to proxy a potentially large report. Shape-identical to Part 1's `VerificationReport`.
 
 **`(ours)` The first real limit is context size, not the 15-min clock.** Each finding agent is prompted over
 the *whole corpus*, so a big matter exhausts the **model context window** before it exhausts Lambda's
@@ -408,10 +410,14 @@ adds one more call); that's the target I'd validate against real traffic, not a 
    `GET /jobs/{id}/report`. The single load-bearing change — it makes long jobs survivable.
 2. **S3 (per-tenant prefix + SSE-S3 + tenant-scoped role) + presigned upload; DynamoDB job table with atomic
    conditional idempotency; SQS + DLQ; the Part 1 orchestrator hosted unchanged on `SQS→Lambda`** with a
-   **capped reserved concurrency** as the spike throttle, a **one-line larger-context model fallback** on the
-   `llm.py` seam for an unusually big matter, and a **crude per-matter doc/token ceiling** that fails loudly
-   (reusing the `matter_too_large_for_v1` path) so one bulk upload can't run a surprise bill. (Per-tenant token
-   budgets, map-reduce, and a second compute plane are deliberately *not* here — see deferred.)
+   **capped reserved concurrency** as the spike throttle, a **larger-context model fallback** on the `llm.py`
+   seam for an unusually big matter, and a **per-matter doc/token ceiling** that fails loudly (reusing the
+   `matter_too_large_for_v1` path) so one bulk upload can't run a surprise bill. **`(ours)`** I pin concrete
+   conservative defaults at launch — e.g. cap a matter at a few hundred docs / a few hundred-K input tokens —
+   set **below** the threshold where the larger-context fallback model auto-selects, so the expensive path can
+   never fire silently; plus one **aggregate daily provider-token spend alarm** (an alarm, not architecture)
+   as the budget backstop. (Per-tenant token budgets, map-reduce, and a second compute plane are deliberately
+   *not* here — see deferred.)
 3. **Tenant isolation** at the storage/prefix/partition layer + `(tenant, matter)` minted once at the edge and
    threaded end-to-end (the `role` dimension is *named* for additive RBAC later, but nothing at MVP wires or
    reads it, so it isn't threaded yet).

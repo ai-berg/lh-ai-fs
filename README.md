@@ -5,6 +5,14 @@ against the surrounding case file and reports where the brief misstates its
 authorities or contradicts the record — the *epistemic work* of checking
 citations and record cites, returned as structured, source-grounded JSON.
 
+This challenge has **two parts**, and both are delivered here:
+
+1. **Part 1 — Working prototype** (this repo): the BS Detector pipeline. Covered below.
+2. **Part 2 — Production readiness plan**: how this prototype becomes a production MVP
+   for real legal customers — architecture, AI-workflow orchestration, data/storage,
+   security, observability, sequencing, and tradeoffs. See
+   **[`docs/production-readiness.md`](docs/production-readiness.md)**.
+
 ## Quickstart (for the reviewer)
 
 Three commands cover everything — run the pipeline, run the tests, run the evals.
@@ -227,4 +235,9 @@ AI assistant, ~600k users):**
 ## The assessment
 
 This project implements the "BS Detector" technical assessment for the
-Sr Fullstack Engineer role at Learned Hand.
+AI/ML Engineer role at Learned Hand. It is delivered in two parts: the working
+pipeline above (Part 1) and a production-readiness plan for scaling it into an
+MVP (Part 2, [`docs/production-readiness.md`](docs/production-readiness.md)) —
+covering AI-workflow orchestration, data/storage scalability, infrastructure,
+reliability, security, observability, and cost controls. The follow-up interview
+defends both: the architecture, the bottlenecks, and what to build first.

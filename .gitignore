@@ -27,8 +27,8 @@ dist/
 # Plans
 docs/plans/
 
-# Internal working notes (PT-BR, not part of the deliverable)
-docs/
+# Internal working notes (PT-BR interview prep, not part of the deliverable)
+.internal/
 
 # E2E artifacts
 *.png

@@ -30,7 +30,7 @@ or in the verified Part 1 code. Anything that is a judgment call is tagged **`(o
   concurrency** and size the MVP for low hundreds of concurrent matters. Tens of thousands is the *stated
   path*, explicitly deferred (Q8) — designing for it now is the over-engineering I refuse.
 - **Latency.** From the code: `AGENT_TIMEOUT_SECONDS` defaults to **120s** (`services/agents/base.py`),
-  sized for a measured ~50–90s reasoning call. Three finding agents fan out concurrently via `asyncio.gather`
+  sized for a ~50–90s reasoning call observed during Part 1 development. Three finding agents fan out concurrently via `asyncio.gather`
   in `run_agents`, then `JudicialMemoAgent` runs last. A single-document analysis is ~1–3 min; a real matter
   is minutes-to-tens-of-minutes — exactly the scenario's "minutes." **`(ours)`** This is an **async-job
   product, not a chat product**: firms tolerate minutes *if* status is visible and the result is trustworthy.
@@ -45,8 +45,10 @@ or in the verified Part 1 code. Anything that is a judgment call is tagged **`(o
   **`(ours, go/no-go)`** I assume we can contractually get **zero-retention / no-training** terms from the
   model provider (OpenAI today, since Part 1 is on the OpenAI SDK), attested in the data-processing agreement
   and surfaced to the customer. **Plan B if a firm won't accept OpenAI as a sub-processor:** the `llm.py`
-  seam swaps to **AWS Bedrock or Azure OpenAI under their zero-retention terms** — the validated portability
-  target, not a vague hope — so this is a contained provider swap, not a dead end.
+  seam swaps to **AWS Bedrock (Claude — a platform I've run in production) or Azure OpenAI under their
+  zero-retention terms**. Honest scope: the seam is wired to the OpenAI SDK today, so this is a contained
+  porting effort (Bedrock's structured-output path differs), not a one-line drop-in — but a known, bounded
+  one, not a dead end.
 
 **Explicitly NOT assuming:** sub-second latency; that documents arrive clean (real matters are PDFs — OCR is
 in the eventual path, not the MVP); any throughput beyond the scenario's "hundreds → tens of thousands."

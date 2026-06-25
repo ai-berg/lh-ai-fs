@@ -91,7 +91,7 @@ recovery story.
    scale-to-zero fit. **`(ours)`** I deliberately *don't* put this behind a standing ALB+Fargate: an idle ALB
    bills 24/7, and it would be the only always-on cost in an otherwise scale-to-zero stack. Fargate stays the
    named, deferred escape hatch for the irreducible large *matter* (Q3) — never the API plane.
-2. **Document store** — S3, one prefix per tenant (`s3://bucket/{tenant_id}/{matter_id}/...`), SSE-S3 at rest (Q6).
+2. **Document store** — S3, one prefix per tenant (`s3://bucket/documents/{tenant_id}/{matter_id}/...`), SSE-S3 at rest (Q6).
    *Rationale:* confidential docs are the highest-risk asset; isolating at the storage+key layer is the
    cheapest strong tenant boundary.
 3. **Job/state store** — DynamoDB. **`(ours, justified — not familiarity)`** PK `tenant_id`, SK `job_id`

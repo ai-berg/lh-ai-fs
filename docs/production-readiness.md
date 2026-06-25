@@ -317,10 +317,12 @@ is enforced at the **cheapest strongest layer**, not in app code alone.
   audit-logged like any matter document — not a freely shareable artifact.
 - **Data-in-motion to the LLM `(honest phrasing)`.** The worker **must** load plaintext into memory to call
   the model (`run_pipeline` takes a `{stem: content}` dict), so the enforceable claim is **plaintext is
-  process-ephemeral — never persisted to disk or logs, isolated by a tenant-scoped role in a short-lived
-  execution env with no warm-container reuse across tenants** — *not* the absolutist "never transits our
-  compute" (nor a promise to scrub CPython's heap, which the runtime doesn't guarantee). All model calls go
-  to the provider only under the no-training/zero-retention agreement (Q1). Part 1's per-document `uuid4`
+  process-ephemeral — never persisted to disk or logs, and every job runs under a per-job tenant-scoped role
+  (STS assume-role) so a worker can only ever touch the one tenant it is serving** — *not* the absolutist
+  "never transits our compute," and explicitly **not** a claim that the Lambda execution environment is never
+  reused (it can be — the boundary is the per-job scoped credential and zero plaintext persistence, which
+  hold regardless of container reuse), nor a promise to scrub CPython's heap, which the runtime doesn't
+  guarantee. All model calls go to the provider only under the no-training/zero-retention agreement (Q1). Part 1's per-document `uuid4`
   sentinel fencing (`prompts.py`) already stops one tenant's
   malicious document from closing a *sibling's* fence to inject instructions.
 - **Logs carry counts and IDs, never content** (`tenant_id + job_id + agent + status`, matching `base.py`'s

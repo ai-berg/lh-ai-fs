@@ -109,6 +109,11 @@ cp backend/.env.example .env      # add your OPENAI_API_KEY at the repo root
 docker compose up --build
 ```
 
+> **After pulling frontend dependency changes:** the frontend keeps
+> `node_modules` in an anonymous volume, which `up --build` reuses. Start with
+> `docker compose up --build -V` (or run `docker compose down` first) so the
+> container picks up the new `package-lock.json` instead of the old packages.
+
 The API runs at `http://localhost:8002` (published on loopback only). Try it:
 
 ```bash
